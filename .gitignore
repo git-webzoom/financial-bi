@@ -34,3 +34,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# supabase temp
+supabase/.temp/
+
+# planilhas locais
+planilhas/
+
+# mcp config (credenciais locais)
+.mcp.json
