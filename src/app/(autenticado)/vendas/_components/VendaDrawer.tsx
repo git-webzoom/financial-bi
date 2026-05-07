@@ -5,14 +5,14 @@ import { X } from 'lucide-react'
 import { formatMoeda, formatData } from '@/lib/format'
 import type { Venda } from './VendasClient'
 
-const STATUS_BADGE: Record<string, string> = {
-  approved:     'bg-green-100 text-green-700',
-  complete:     'bg-green-100 text-green-700',
-  refunded:     'bg-red-100 text-red-700',
-  refunded_sol: 'bg-orange-100 text-orange-700',
-  chargeback:   'bg-red-100 text-red-700',
-  cancelled:    'bg-gray-100 text-gray-600',
-  pending:      'bg-yellow-100 text-yellow-700',
+const STATUS_BADGE: Record<string, { bg: string; text: string }> = {
+  approved:     { bg: '#0F2A1A', text: '#4ADE80' },
+  complete:     { bg: '#0F2A1A', text: '#4ADE80' },
+  refunded:     { bg: '#2A0F0F', text: '#F87171' },
+  refunded_sol: { bg: '#2A1A0F', text: '#FB923C' },
+  chargeback:   { bg: '#2A0F0F', text: '#F87171' },
+  cancelled:    { bg: '#1A1A1A', text: '#888888' },
+  pending:      { bg: '#2A2A0F', text: '#FACC15' },
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -27,9 +27,9 @@ const STATUS_LABEL: Record<string, string> = {
 
 function Linha({ label, valor }: { label: string; valor: React.ReactNode }) {
   return (
-    <div className="flex justify-between gap-4 py-2 border-b border-gray-50 last:border-0">
-      <span className="text-sm text-gray-500 shrink-0">{label}</span>
-      <span className="text-sm text-gray-800 font-medium text-right break-all">{valor ?? '—'}</span>
+    <div className="flex justify-between gap-4 py-2 last:border-0" style={{ borderBottom: '1px solid #1E1E1E' }}>
+      <span className="text-sm shrink-0" style={{ color: '#888888' }}>{label}</span>
+      <span className="text-sm font-medium text-right break-all" style={{ color: '#FFFFFF' }}>{valor ?? '—'}</span>
     </div>
   )
 }
@@ -37,8 +37,8 @@ function Linha({ label, valor }: { label: string; valor: React.ReactNode }) {
 function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">{titulo}</p>
-      <div className="bg-gray-50 rounded-lg px-4 divide-y divide-gray-100">
+      <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#555555' }}>{titulo}</p>
+      <div className="rounded-lg px-4" style={{ backgroundColor: '#0A0A0A', border: '1px solid #1E1E1E' }}>
         {children}
       </div>
     </div>
@@ -51,7 +51,6 @@ interface Props {
 }
 
 export default function VendaDrawer({ venda, onClose }: Props) {
-  // Fechar com Escape
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
@@ -60,26 +59,44 @@ export default function VendaDrawer({ venda, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  const badge = STATUS_BADGE[venda.status] ?? { bg: '#1A1A1A', text: '#888888' }
+
   return (
     <>
       {/* Overlay */}
       <div
-        className="fixed inset-0 bg-black/30 z-40 transition-opacity"
+        className="fixed inset-0 z-40 transition-opacity"
+        style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
         onClick={onClose}
       />
 
       {/* Painel */}
-      <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-white shadow-2xl z-50 flex flex-col">
+      <div
+        className="fixed right-0 top-0 h-full w-full max-w-lg z-50 flex flex-col shadow-2xl"
+        style={{ backgroundColor: '#111111', borderLeft: '1px solid #222222' }}
+      >
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200" style={{ backgroundColor: '#1E3A5F' }}>
+        <div
+          className="flex items-center justify-between px-6 py-4"
+          style={{ backgroundColor: '#1A1A1A', borderBottom: '1px solid #222222' }}
+        >
           <div>
-            <p className="text-white font-semibold">Detalhe da Venda</p>
-            <p className="text-white/60 text-xs font-mono mt-0.5">{venda.id}</p>
+            <p className="font-semibold" style={{ color: '#FFFFFF' }}>Detalhe da Venda</p>
+            <p className="text-xs font-mono mt-0.5" style={{ color: '#555555' }}>{venda.id}</p>
           </div>
           <button
             onClick={onClose}
-            className="text-white/70 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
+            className="p-1 rounded-lg transition-colors"
+            style={{ color: '#888888' }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLElement).style.color = '#FFFFFF'
+              ;(e.currentTarget as HTMLElement).style.backgroundColor = '#333333'
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLElement).style.color = '#888888'
+              ;(e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
+            }}
           >
             <X className="w-5 h-5" />
           </button>
@@ -90,7 +107,10 @@ export default function VendaDrawer({ venda, onClose }: Props) {
 
           <Secao titulo="Resumo">
             <Linha label="Status" valor={
-              <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[venda.status] ?? ''}`}>
+              <span
+                className="inline-block px-2 py-0.5 rounded-full text-xs font-medium"
+                style={{ backgroundColor: badge.bg, color: badge.text }}
+              >
                 {STATUS_LABEL[venda.status] ?? venda.status}
               </span>
             } />
@@ -108,10 +128,10 @@ export default function VendaDrawer({ venda, onClose }: Props) {
           </Secao>
 
           <Secao titulo="Datas">
-            <Linha label="Pedido"     valor={formatData(venda.data_pedido)} />
-            <Linha label="Aprovação"  valor={formatData(venda.data_aprovacao)} />
+            <Linha label="Pedido"       valor={formatData(venda.data_pedido)} />
+            <Linha label="Aprovação"    valor={formatData(venda.data_aprovacao)} />
             <Linha label="Cancelamento" valor={formatData(venda.data_cancelamento)} />
-            <Linha label="Garantia"   valor={formatData(venda.data_garantia)} />
+            <Linha label="Garantia"     valor={formatData(venda.data_garantia)} />
           </Secao>
 
           <Secao titulo="Produto">

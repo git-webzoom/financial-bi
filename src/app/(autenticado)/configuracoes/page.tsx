@@ -30,7 +30,7 @@ export default async function ConfiguracoesPage() {
       .select('integration, ativo, last_sync_at, last_sync_status, expires_at'),
     supabase
       .from('integration_job_runs')
-      .select('id, integration, status, started_at, finished_at, records_fetched, records_inserted, records_error, error_message')
+      .select('id, integration, account_id, status, started_at, finished_at, records_fetched, records_inserted, records_error, error_message')
       .order('started_at', { ascending: false })
       .limit(50),
     supabase.from('raw_vendas')

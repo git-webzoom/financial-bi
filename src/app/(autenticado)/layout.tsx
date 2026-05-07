@@ -19,10 +19,10 @@ export default async function LayoutAutenticado({ children }: { children: React.
   const isAdmin = profile?.perfil === 'admin'
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen" style={{ backgroundColor: '#0A0A0A' }}>
       <Sidebar nomeUsuario={nomeUsuario} isAdmin={isAdmin} />
 
-      <div className="flex-1 flex flex-col min-w-0" style={{ backgroundColor: '#F3F4F6' }}>
+      <div className="flex-1 flex flex-col min-w-0" style={{ backgroundColor: '#0A0A0A' }}>
         <Header nomeUsuario={nomeUsuario} />
         <main className="flex-1 overflow-auto">
           {children}

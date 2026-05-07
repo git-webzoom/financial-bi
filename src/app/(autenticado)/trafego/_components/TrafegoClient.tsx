@@ -194,8 +194,8 @@ export default function TrafegoClient({ inicial, filtrosDefault, pageSize }: Pro
   return (
     <div className="p-6 space-y-5">
       <div>
-        <h2 className="text-base font-semibold text-gray-800">Tráfego Pago</h2>
-        <p className="text-xs text-gray-400 mt-0.5">Meta Ads — dados sincronizados automaticamente</p>
+        <h2 className="text-base font-bold" style={{ color: '#FFFFFF' }}>Tráfego Pago</h2>
+        <p className="text-xs mt-0.5" style={{ color: '#888888' }}>Meta Ads — dados sincronizados automaticamente</p>
       </div>
 
       <TrafegoKpis kpis={kpis} />

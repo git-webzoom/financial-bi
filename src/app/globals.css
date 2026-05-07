@@ -1,3 +1,37 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --color-bg:           #0A0A0A;
+  --color-surface:      #111111;
+  --color-border:       #222222;
+  --color-primary:      #C9A84C;
+  --color-primary-hover:#E2C06A;
+  --color-text:         #FFFFFF;
+  --color-text-muted:   #888888;
+  --color-separator:    #1E1E1E;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* Scrollbar escura */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #111111; }
+::-webkit-scrollbar-thumb { background: #333333; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #444444; }
+
+/* Inputs nativos de data no tema escuro */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.6);
+  cursor: pointer;
+}
+
+/* Select nativo */
+select option {
+  background-color: #111111;
+  color: #FFFFFF;
+}

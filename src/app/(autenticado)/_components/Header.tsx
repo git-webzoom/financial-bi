@@ -21,7 +21,7 @@ export default function Header({ nomeUsuario }: HeaderProps) {
 
   const titulo =
     Object.entries(titulos).find(([key]) => pathname === key || pathname.startsWith(key + '/'))?.[1]
-    ?? 'Sistema BI'
+    ?? 'Financial BI'
 
   const iniciais = nomeUsuario
     .split(' ')
@@ -31,13 +31,16 @@ export default function Header({ nomeUsuario }: HeaderProps) {
     .toUpperCase()
 
   return (
-    <header className="flex items-center justify-between px-8 py-4 bg-white border-b border-gray-200">
-      <h1 className="text-xl font-semibold text-gray-800">{titulo}</h1>
+    <header
+      className="flex items-center justify-between px-8 py-4"
+      style={{ backgroundColor: '#111111', borderBottom: '1px solid #1E1E1E' }}
+    >
+      <h1 className="text-xl font-bold" style={{ color: '#FFFFFF' }}>{titulo}</h1>
       <div className="flex items-center gap-3">
-        <span className="text-sm text-gray-600 hidden sm:block">{nomeUsuario}</span>
+        <span className="text-sm hidden sm:block" style={{ color: '#888888' }}>{nomeUsuario}</span>
         <div
-          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-          style={{ backgroundColor: '#1E3A5F' }}
+          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+          style={{ backgroundColor: '#C9A84C', color: '#000000' }}
         >
           {iniciais}
         </div>

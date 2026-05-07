@@ -45,16 +45,22 @@ export default function Sidebar({ nomeUsuario, isAdmin }: SidebarProps) {
   return (
     <aside
       className="w-60 shrink-0 flex flex-col"
-      style={{ backgroundColor: '#1E3A5F' }}
+      style={{ backgroundColor: '#0A0A0A', borderRight: '1px solid #1E1E1E' }}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
-        <div className="flex items-center justify-center w-8 h-8 bg-white/10 rounded-lg shrink-0">
-          <BarChart3 className="w-4 h-4 text-white" />
+      <div className="flex items-center gap-3 px-5 py-5" style={{ borderBottom: '1px solid #1E1E1E' }}>
+        <div
+          className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0"
+          style={{ backgroundColor: '#1A1A1A', border: '1px solid #C9A84C33' }}
+        >
+          <BarChart3 className="w-4 h-4" style={{ color: '#C9A84C' }} />
         </div>
         <div className="min-w-0">
-          <p className="text-white font-bold text-sm leading-tight truncate">Sistema BI</p>
-          <p className="text-white/50 text-xs truncate">Automação de Dados</p>
+          <p className="font-bold text-sm leading-tight truncate">
+            <span style={{ color: '#FFFFFF' }}>Financial </span>
+            <span style={{ color: '#C9A84C' }}>BI</span>
+          </p>
+          <p className="text-xs truncate" style={{ color: '#888888' }}>Automação de Dados</p>
         </div>
       </div>
 
@@ -66,13 +72,37 @@ export default function Sidebar({ nomeUsuario, isAdmin }: SidebarProps) {
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                active
-                  ? 'bg-white/15 text-white'
-                  : 'text-white/60 hover:bg-white/10 hover:text-white'
-              }`}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
+              style={active
+                ? {
+                    backgroundColor: '#1A1A1A',
+                    color: '#FFFFFF',
+                    borderLeft: '3px solid #C9A84C',
+                    paddingLeft: '9px',
+                  }
+                : {
+                    color: '#888888',
+                    borderLeft: '3px solid transparent',
+                    paddingLeft: '9px',
+                  }
+              }
+              onMouseEnter={e => {
+                if (!active) {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = '#141414'
+                  ;(e.currentTarget as HTMLElement).style.color = '#FFFFFF'
+                }
+              }}
+              onMouseLeave={e => {
+                if (!active) {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
+                  ;(e.currentTarget as HTMLElement).style.color = '#888888'
+                }
+              }}
             >
-              <Icon className="w-4 h-4 shrink-0" />
+              <Icon
+                className="w-4 h-4 shrink-0"
+                style={{ color: active ? '#C9A84C' : '#888888' }}
+              />
               {label}
             </Link>
           )
@@ -80,14 +110,23 @@ export default function Sidebar({ nomeUsuario, isAdmin }: SidebarProps) {
       </nav>
 
       {/* Rodapé: usuário + logout */}
-      <div className="px-3 py-4 border-t border-white/10 space-y-1">
+      <div className="px-3 py-4 space-y-1" style={{ borderTop: '1px solid #1E1E1E' }}>
         <div className="px-3 py-2">
-          <p className="text-white/40 text-xs">Logado como</p>
-          <p className="text-white text-sm font-medium truncate">{nomeUsuario}</p>
+          <p className="text-xs" style={{ color: '#555555' }}>Logado como</p>
+          <p className="text-sm font-medium truncate" style={{ color: '#FFFFFF' }}>{nomeUsuario}</p>
         </div>
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-white/60 hover:bg-white/10 hover:text-white transition-colors"
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
+          style={{ color: '#888888' }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = '#141414'
+            ;(e.currentTarget as HTMLElement).style.color = '#FFFFFF'
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
+            ;(e.currentTarget as HTMLElement).style.color = '#888888'
+          }}
         >
           <LogOut className="w-4 h-4 shrink-0" />
           Sair

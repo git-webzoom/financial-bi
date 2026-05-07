@@ -1,30 +1,10 @@
 import { DollarSign, ShoppingCart, TrendingUp, Zap } from 'lucide-react'
 
 const kpis = [
-  {
-    label: 'Faturamento Bruto',
-    valor: 'R$ 0,00',
-    icon: DollarSign,
-    cor: '#1E3A5F',
-  },
-  {
-    label: 'Total de Vendas',
-    valor: '0',
-    icon: ShoppingCart,
-    cor: '#2563EB',
-  },
-  {
-    label: 'Total Investido',
-    valor: 'R$ 0,00',
-    icon: TrendingUp,
-    cor: '#7C3AED',
-  },
-  {
-    label: 'ROAS',
-    valor: '0,00x',
-    icon: Zap,
-    cor: '#059669',
-  },
+  { label: 'Faturamento Bruto', valor: 'R$ 0,00',  icon: DollarSign },
+  { label: 'Total de Vendas',   valor: '0',         icon: ShoppingCart },
+  { label: 'Total Investido',   valor: 'R$ 0,00',  icon: TrendingUp },
+  { label: 'ROAS',              valor: '0,00x',     icon: Zap },
 ]
 
 export default function DashboardPage() {
@@ -33,32 +13,39 @@ export default function DashboardPage() {
 
       {/* Cards KPI */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-        {kpis.map(({ label, valor, icon: Icon, cor }) => (
-          <div key={label} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        {kpis.map(({ label, valor, icon: Icon }) => (
+          <div
+            key={label}
+            className="rounded-xl p-6"
+            style={{ backgroundColor: '#111111', border: '1px solid #222222' }}
+          >
             <div className="flex items-center justify-between mb-4">
-              <span className="text-sm font-medium text-gray-500">{label}</span>
+              <span className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>{label}</span>
               <div
                 className="w-9 h-9 rounded-lg flex items-center justify-center"
-                style={{ backgroundColor: cor + '15' }}
+                style={{ backgroundColor: '#C9A84C1A' }}
               >
-                <Icon className="w-5 h-5" style={{ color: cor }} />
+                <Icon className="w-5 h-5" style={{ color: '#C9A84C' }} />
               </div>
             </div>
-            <p className="text-2xl font-bold text-gray-900">{valor}</p>
+            <p className="text-2xl font-bold" style={{ color: '#FFFFFF' }}>{valor}</p>
           </div>
         ))}
       </div>
 
       {/* Mensagem de estado vazio */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 border-dashed flex flex-col items-center justify-center py-20 px-6 text-center">
+      <div
+        className="rounded-xl border-dashed flex flex-col items-center justify-center py-20 px-6 text-center"
+        style={{ backgroundColor: '#111111', border: '1px dashed #222222' }}
+      >
         <div
           className="w-14 h-14 rounded-full flex items-center justify-center mb-4"
-          style={{ backgroundColor: '#1E3A5F15' }}
+          style={{ backgroundColor: '#C9A84C1A' }}
         >
-          <Zap className="w-7 h-7" style={{ color: '#1E3A5F' }} />
+          <Zap className="w-7 h-7" style={{ color: '#C9A84C' }} />
         </div>
-        <h2 className="text-lg font-semibold text-gray-700 mb-2">Nenhum dado disponível</h2>
-        <p className="text-sm text-gray-400 max-w-sm">
+        <h2 className="text-lg font-semibold mb-2" style={{ color: '#FFFFFF' }}>Nenhum dado disponível</h2>
+        <p className="text-sm max-w-sm" style={{ color: '#888888' }}>
           Configure as integrações para começar a receber dados e visualizar os indicadores do seu negócio.
         </p>
       </div>

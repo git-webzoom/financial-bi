@@ -85,14 +85,14 @@ const MARKETPLACE_OPTIONS = [
   { value: 'stripe',      label: 'Stripe' },
 ]
 
-const STATUS_BADGE: Record<string, string> = {
-  approved:     'bg-green-100 text-green-700',
-  complete:     'bg-green-100 text-green-700',
-  refunded:     'bg-red-100 text-red-700',
-  refunded_sol: 'bg-orange-100 text-orange-700',
-  chargeback:   'bg-red-100 text-red-700',
-  cancelled:    'bg-gray-100 text-gray-600',
-  pending:      'bg-yellow-100 text-yellow-700',
+const STATUS_BADGE: Record<string, { bg: string; text: string }> = {
+  approved:     { bg: '#0F2A1A', text: '#4ADE80' },
+  complete:     { bg: '#0F2A1A', text: '#4ADE80' },
+  refunded:     { bg: '#2A0F0F', text: '#F87171' },
+  refunded_sol: { bg: '#2A1A0F', text: '#FB923C' },
+  chargeback:   { bg: '#2A0F0F', text: '#F87171' },
+  cancelled:    { bg: '#1A1A1A', text: '#888888' },
+  pending:      { bg: '#2A2A0F', text: '#FACC15' },
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -105,12 +105,22 @@ const STATUS_LABEL: Record<string, string> = {
   pending:      'Pendente',
 }
 
+function StatusBadge({ status }: { status: string }) {
+  const cfg = STATUS_BADGE[status] ?? { bg: '#1A1A1A', text: '#888888' }
+  return (
+    <span
+      className="inline-block px-2 py-0.5 rounded-full text-xs font-medium"
+      style={{ backgroundColor: cfg.bg, color: cfg.text }}
+    >
+      {STATUS_LABEL[status] ?? status}
+    </span>
+  )
+}
+
 // ─── Combobox de produto com busca ───────────────────────────────────────────
 
 function ProdutoCombobox({
-  produtos,
-  value,
-  onChange,
+  produtos, value, onChange,
 }: {
   produtos: Produto[]
   value: string
@@ -125,7 +135,6 @@ function ProdutoCombobox({
     p.nome.toLowerCase().includes(busca.toLowerCase())
   )
 
-  // Fecha ao clicar fora
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
@@ -148,50 +157,69 @@ function ProdutoCombobox({
       <button
         type="button"
         onClick={() => setAberto((v) => !v)}
-        className="flex items-center justify-between gap-2 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[180px] max-w-[220px]"
+        className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm min-w-[180px] max-w-[220px] outline-none transition-colors"
+        style={{
+          backgroundColor: '#111111',
+          border: '1px solid #222222',
+          color: selecionado ? '#FFFFFF' : '#555555',
+        }}
       >
         <span className="truncate">{selecionado?.nome ?? 'Todos os produtos'}</span>
-        <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+        <ChevronDown className="w-4 h-4 shrink-0" style={{ color: '#555555' }} />
       </button>
 
       {aberto && (
-        <div className="absolute z-50 top-full mt-1 left-0 w-72 bg-white border border-gray-200 rounded-xl shadow-lg">
-          {/* Campo de busca */}
-          <div className="p-2 border-b border-gray-100">
-            <div className="flex items-center gap-2 px-2 py-1.5 border border-gray-200 rounded-lg">
-              <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+        <div
+          className="absolute z-50 top-full mt-1 left-0 w-72 rounded-xl shadow-2xl overflow-hidden"
+          style={{ backgroundColor: '#111111', border: '1px solid #333333' }}
+        >
+          <div className="p-2" style={{ borderBottom: '1px solid #1E1E1E' }}>
+            <div
+              className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
+              style={{ border: '1px solid #222222' }}
+            >
+              <Search className="w-3.5 h-3.5 shrink-0" style={{ color: '#555555' }} />
               <input
                 autoFocus
                 type="text"
                 placeholder="Buscar produto..."
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
-                className="flex-1 text-sm outline-none bg-transparent text-gray-700 placeholder-gray-400"
+                className="flex-1 text-sm outline-none bg-transparent"
+                style={{ color: '#FFFFFF' }}
               />
               {busca && (
-                <button onClick={() => setBusca('')}>
-                  <X className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600" />
+                <button onClick={() => setBusca('')} style={{ color: '#555555' }}>
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
           </div>
 
-          {/* Lista */}
           <div className="max-h-56 overflow-y-auto py-1">
             <button
               onClick={() => selecionar('')}
-              className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${value === '' ? 'font-medium text-blue-600' : 'text-gray-700'}`}
+              className="w-full text-left px-4 py-2 text-sm transition-colors"
+              style={{ color: value === '' ? '#C9A84C' : '#888888' }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}
             >
               Todos os produtos
             </button>
             {filtrados.length === 0 ? (
-              <p className="px-4 py-2 text-sm text-gray-400">Nenhum produto encontrado</p>
+              <p className="px-4 py-2 text-sm" style={{ color: '#555555' }}>Nenhum produto encontrado</p>
             ) : (
               filtrados.map((p) => (
                 <button
                   key={p.id}
                   onClick={() => selecionar(p.id)}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors truncate ${value === p.id ? 'font-medium text-blue-600' : 'text-gray-700'}`}
+                  className="w-full text-left px-4 py-2 text-sm truncate transition-colors"
+                  style={{
+                    color: value === p.id ? '#C9A84C' : '#FFFFFF',
+                    fontWeight: value === p.id ? 500 : 400,
+                  }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}
                 >
                   {p.nome}
                 </button>
@@ -208,11 +236,34 @@ function ProdutoCombobox({
 
 function KpiCard({ label, valor }: { label: string; valor: string }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4">
-      <p className="text-xs font-medium text-gray-500 mb-1">{label}</p>
-      <p className="text-xl font-bold text-gray-900">{valor}</p>
+    <div
+      className="rounded-xl px-5 py-4"
+      style={{ backgroundColor: '#111111', border: '1px solid #222222' }}
+    >
+      <p className="text-xs font-medium uppercase tracking-wide mb-1" style={{ color: '#888888' }}>{label}</p>
+      <p className="text-xl font-bold" style={{ color: '#FFFFFF' }}>{valor}</p>
     </div>
   )
+}
+
+const inputStyle: React.CSSProperties = {
+  backgroundColor: '#111111',
+  border: '1px solid #222222',
+  color: '#FFFFFF',
+  borderRadius: '0.5rem',
+  padding: '0.5rem 0.75rem',
+  fontSize: '0.875rem',
+  outline: 'none',
+}
+
+const selectStyle: React.CSSProperties = {
+  backgroundColor: '#111111',
+  border: '1px solid #222222',
+  color: '#FFFFFF',
+  borderRadius: '0.5rem',
+  padding: '0.5rem 0.75rem',
+  fontSize: '0.875rem',
+  outline: 'none',
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -252,7 +303,6 @@ export default function VendasClient({
       const inicio = params.dataInicio + 'T00:00:00-03:00'
       const fim    = params.dataFim    + 'T23:59:59-03:00'
 
-      // Query principal — select simples, sem join (FKs removidas)
       let q = supabase
         .from('vendas')
         .select('*', { count: 'exact' })
@@ -261,16 +311,15 @@ export default function VendasClient({
         .order('data_pedido', { ascending: false })
         .range(params.pagina * PAGE_SIZE, params.pagina * PAGE_SIZE + PAGE_SIZE - 1)
 
-      if (params.produtoId)  q = q.eq('produto_id', params.produtoId)
-      if (params.status)     q = q.eq('status', params.status)
-      if (params.pagamento)  q = q.ilike('pagamento', `%${params.pagamento}%`)
+      if (params.produtoId)   q = q.eq('produto_id', params.produtoId)
+      if (params.status)      q = q.eq('status', params.status)
+      if (params.pagamento)   q = q.ilike('pagamento', `%${params.pagamento}%`)
       if (params.marketplace) q = q.eq('marketplace', params.marketplace)
 
       const { data, count } = await q
       setVendas((data as Venda[]) ?? [])
       setTotal(count ?? 0)
 
-      // KPIs — agregado no banco para evitar limite de 1000 linhas
       const { data: kdata } = await supabase.rpc('get_kpis_vendas', {
         p_inicio:      inicio,
         p_fim:         fim,
@@ -323,66 +372,91 @@ export default function VendasClient({
       </div>
 
       {/* Filtros */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+      <div
+        className="rounded-xl p-4"
+        style={{ backgroundColor: '#111111', border: '1px solid #222222' }}
+      >
         <div className="flex flex-wrap gap-3 items-end">
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">De</label>
+            <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>De</label>
             <input type="date" value={dataInicio}
               onChange={(e) => setDataInicio(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={inputStyle}
+              onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+              onBlur={e => (e.target.style.borderColor = '#222222')}
             />
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">Até</label>
+            <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Até</label>
             <input type="date" value={dataFim}
               onChange={(e) => setDataFim(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={inputStyle}
+              onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+              onBlur={e => (e.target.style.borderColor = '#222222')}
             />
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">Produto</label>
+            <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Produto</label>
             <ProdutoCombobox produtos={produtos} value={produtoId} onChange={setProdutoId} />
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">Status</label>
-            <select value={status} onChange={(e) => setStatus(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Status</label>
+            <select value={status} onChange={(e) => setStatus(e.target.value)} style={selectStyle}
+              onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+              onBlur={e => (e.target.style.borderColor = '#222222')}
             >
               {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">Pagamento</label>
-            <select value={pagamento} onChange={(e) => setPagamento(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Pagamento</label>
+            <select value={pagamento} onChange={(e) => setPagamento(e.target.value)} style={selectStyle}
+              onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+              onBlur={e => (e.target.style.borderColor = '#222222')}
             >
               {PAGAMENTO_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500">Marketplace</label>
-            <select value={marketplace} onChange={(e) => setMarketplace(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Marketplace</label>
+            <select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} style={selectStyle}
+              onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+              onBlur={e => (e.target.style.borderColor = '#222222')}
             >
               {MARKETPLACE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
 
           <div className="flex gap-2 pb-0.5">
-            <button onClick={() => aplicarFiltros(0)} disabled={isPending}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-60 transition-opacity"
-              style={{ backgroundColor: '#1E3A5F' }}
+            <button
+              onClick={() => aplicarFiltros(0)}
+              disabled={isPending}
+              className="px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-60 transition-opacity"
+              style={{ backgroundColor: '#C9A84C', color: '#000000' }}
+              onMouseEnter={e => { if (!isPending) (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A' }}
+              onMouseLeave={e => { if (!isPending) (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C' }}
             >
               {isPending ? 'Buscando…' : 'Buscar'}
             </button>
-            <button onClick={limparFiltros} disabled={isPending}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+            <button
+              onClick={limparFiltros}
+              disabled={isPending}
+              className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
+              style={{ backgroundColor: 'transparent', border: '1px solid #333333', color: '#888888' }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'
+                ;(e.currentTarget as HTMLElement).style.color = '#FFFFFF'
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
+                ;(e.currentTarget as HTMLElement).style.color = '#888888'
+              }}
             >
               Limpar
             </button>
@@ -391,54 +465,62 @@ export default function VendasClient({
       </div>
 
       {/* Tabela */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div
+        className="rounded-xl overflow-hidden"
+        style={{ backgroundColor: '#111111', border: '1px solid #222222' }}
+      >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="text-left px-4 py-3 font-medium text-gray-500 whitespace-nowrap">Data Pedido</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Nome</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Produto</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Oferta</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-500">Valor</th>
-                <th className="text-center px-4 py-3 font-medium text-gray-500">Status</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Pagamento</th>
+              <tr style={{ borderBottom: '1px solid #1E1E1E', backgroundColor: '#111111' }}>
+                {['Data Pedido', 'Nome', 'Produto', 'Oferta', 'Valor', 'Status', 'Pagamento'].map(h => (
+                  <th
+                    key={h}
+                    className="text-left px-4 py-3 font-medium whitespace-nowrap text-xs uppercase tracking-wide"
+                    style={{ color: '#888888' }}
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className={isPending ? 'opacity-50' : ''}>
               {vendas.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-gray-400">
+                  <td colSpan={7} className="text-center py-12 text-sm" style={{ color: '#555555' }}>
                     Nenhuma venda encontrada para os filtros selecionados.
                   </td>
                 </tr>
               ) : (
                 vendas.map((v) => (
-                  <tr key={v.id} onClick={() => setVendaSelecionada(v)}
-                    className="border-b border-gray-50 hover:bg-blue-50 cursor-pointer transition-colors"
+                  <tr
+                    key={v.id}
+                    onClick={() => setVendaSelecionada(v)}
+                    className="cursor-pointer transition-colors"
+                    style={{ borderBottom: '1px solid #1E1E1E', backgroundColor: '#0A0A0A' }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#111111'}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#0A0A0A'}
                   >
-                    <td className="px-4 py-3 whitespace-nowrap text-gray-600">
+                    <td className="px-4 py-3 whitespace-nowrap" style={{ color: '#888888' }}>
                       {formatData(v.data_pedido)}
                     </td>
                     <td className="px-4 py-3 max-w-[180px]">
-                      <p className="font-medium text-gray-800 truncate">{v.nome_contato ?? '—'}</p>
-                      <p className="text-xs text-gray-400 truncate">{v.email_contato ?? ''}</p>
+                      <p className="font-medium truncate" style={{ color: '#FFFFFF' }}>{v.nome_contato ?? '—'}</p>
+                      <p className="text-xs truncate" style={{ color: '#555555' }}>{v.email_contato ?? ''}</p>
                     </td>
-                    <td className="px-4 py-3 text-gray-700 max-w-[160px] truncate">
+                    <td className="px-4 py-3 max-w-[160px] truncate" style={{ color: '#FFFFFF' }}>
                       {produtos.find((p) => p.id === v.produto_id)?.nome ?? v.produto_id ?? '—'}
                     </td>
-                    <td className="px-4 py-3 text-gray-600 max-w-[160px] truncate">
+                    <td className="px-4 py-3 max-w-[160px] truncate" style={{ color: '#888888' }}>
                       {v.nome_oferta ?? '—'}
                     </td>
-                    <td className="px-4 py-3 text-right font-medium text-gray-800 whitespace-nowrap">
+                    <td className="px-4 py-3 text-right font-medium whitespace-nowrap" style={{ color: '#C9A84C' }}>
                       {formatMoeda(v.valor_venda, v.moeda)}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[v.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {STATUS_LABEL[v.status] ?? v.status}
-                      </span>
+                      <StatusBadge status={v.status} />
                     </td>
-                    <td className="px-4 py-3 text-gray-600 capitalize">
+                    <td className="px-4 py-3 capitalize" style={{ color: '#888888' }}>
                       {v.pagamento?.replace('_', ' ') ?? '—'}
                     </td>
                   </tr>
@@ -449,22 +531,33 @@ export default function VendasClient({
         </div>
 
         {/* Paginação */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50">
-          <p className="text-sm text-gray-500">
+        <div
+          className="flex items-center justify-between px-4 py-3"
+          style={{ borderTop: '1px solid #1E1E1E', backgroundColor: '#111111' }}
+        >
+          <p className="text-sm" style={{ color: '#555555' }}>
             {total === 0
               ? '0 registros'
               : `${pagina * PAGE_SIZE + 1}–${Math.min((pagina + 1) * PAGE_SIZE, total)} de ${total.toLocaleString('pt-BR')} registros`}
           </p>
           <div className="flex gap-2">
-            <button onClick={() => mudarPagina(pagina - 1)}
+            <button
+              onClick={() => mudarPagina(pagina - 1)}
               disabled={pagina === 0 || isPending}
-              className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              style={{ border: '1px solid #333333', color: '#888888', backgroundColor: 'transparent' }}
+              onMouseEnter={e => { if (!e.currentTarget.disabled) (e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A' }}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}
             >
               ← Anterior
             </button>
-            <button onClick={() => mudarPagina(pagina + 1)}
+            <button
+              onClick={() => mudarPagina(pagina + 1)}
               disabled={pagina >= totalPaginas - 1 || isPending}
-              className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              style={{ border: '1px solid #333333', color: '#888888', backgroundColor: 'transparent' }}
+              onMouseEnter={e => { if (!e.currentTarget.disabled) (e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A' }}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}
             >
               Próximo →
             </button>
