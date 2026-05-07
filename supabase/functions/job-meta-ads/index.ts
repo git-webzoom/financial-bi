@@ -6,8 +6,12 @@ const supabase = createClient(
 )
 
 const META_API = 'https://graph.facebook.com/v21.0'
+
+// ad_id, adset_id, campaign_id são obrigatórios para deduplicação correta
 const META_FIELDS = [
-  'campaign_name', 'adset_name', 'ad_name',
+  'ad_id', 'ad_name',
+  'adset_id', 'adset_name',
+  'campaign_id', 'campaign_name',
   'date_start', 'date_stop',
   'impressions', 'reach', 'frequency', 'spend',
   'clicks',
@@ -21,11 +25,20 @@ function dateStr(d: Date): string {
   return d.toISOString().split('T')[0]
 }
 
-function defaultRange(): { date_start: string; date_end: string } {
+function dailyRange(): { date_start: string; date_end: string } {
   const now = new Date()
-  const d28 = new Date(now); d28.setDate(now.getDate() - 28)
-  const d1  = new Date(now); d1.setDate(now.getDate() - 1)
-  return { date_start: dateStr(d28), date_end: dateStr(d1) }
+  // Hoje + ontem: atualiza dados do dia atual e corrige ontem caso tenha mudado
+  const today = new Date(now)
+  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1)
+  return { date_start: dateStr(yesterday), date_end: dateStr(today) }
+}
+
+function weeklyRange(): { date_start: string; date_end: string } {
+  const now = new Date()
+  // 7 dias: hoje até 6 dias atrás — varredura completa para garantir consistência
+  const today = new Date(now)
+  const d7 = new Date(today); d7.setDate(today.getDate() - 6)
+  return { date_start: dateStr(d7), date_end: dateStr(today) }
 }
 
 async function checkRateLimit(resp: Response) {
@@ -105,7 +118,6 @@ async function processAccount(
   let fetched = 0, inserted = 0, errors = 0
   let errorMsg: string | undefined
 
-  // Job run individual por conta
   const { data: jobRun } = await supabase
     .from('integration_job_runs')
     .insert({
@@ -121,9 +133,29 @@ async function processAccount(
 
   const jobRunId = jobRun?.id
 
+  // Mapa de deduplicação dentro do mesmo job: ad_id+date -> maior spend visto
+  // Isso evita processar duplicatas que a Meta retorna na paginação
+  const seenAdDate = new Map<string, number>()
+
   try {
     for await (const row of fetchInsights(account.account_id, token, dateStart, dateEnd)) {
       fetched++
+
+      const adId    = (row.ad_id as string) ?? ''
+      const dateRef = (row.date_start as string) ?? ''
+      const spend   = parseFloat((row.spend as string) ?? '0')
+
+      // Deduplicação intra-job: se já vimos esse ad+date com spend maior, pula
+      if (adId) {
+        const key = `${adId}::${dateRef}`
+        const prevSpend = seenAdDate.get(key)
+        if (prevSpend !== undefined && prevSpend >= spend) {
+          // Duplicata com valor menor — ignora sem contar como erro
+          fetched-- // não conta como registro útil
+          continue
+        }
+        seenAdDate.set(key, spend)
+      }
 
       const payload = { ...row, ad_account_id: account.account_id }
       const rawId = crypto.randomUUID()
@@ -144,13 +176,7 @@ async function processAccount(
         continue
       }
 
-      const { error: procErr } = await supabase.rpc('process_trafego', { p_raw_id: rawId })
-      if (procErr) {
-        console.error(`Erro em process_trafego(${rawId}):`, procErr.message)
-        errors++
-      } else {
-        inserted++
-      }
+      inserted++
     }
 
     const syncStatus = errors > 0 && fetched === 0 ? 'error' : 'success'
@@ -163,7 +189,7 @@ async function processAccount(
         status:           syncStatus,
         finished_at:      new Date().toISOString(),
         records_fetched:  fetched,
-        records_inserted: inserted,
+        records_inserted: inserted,  // raws gravados — processamento ocorre via cron em background
         records_error:    errors,
       }).eq('id', jobRunId) : Promise.resolve(),
     ])
@@ -177,12 +203,12 @@ async function processAccount(
         .update({ last_sync_at: new Date().toISOString(), last_sync_status: 'error' })
         .eq('id', account.id),
       jobRunId ? supabase.from('integration_job_runs').update({
-        status:        'error',
-        finished_at:   new Date().toISOString(),
-        records_fetched: fetched,
+        status:           'error',
+        finished_at:      new Date().toISOString(),
+        records_fetched:  fetched,
         records_inserted: inserted,
-        records_error: errors + 1,
-        error_message: errorMsg,
+        records_error:    errors + 1,
+        error_message:    errorMsg,
       }).eq('id', jobRunId) : Promise.resolve(),
     ])
 
@@ -196,9 +222,12 @@ Deno.serve(async (req: Request) => {
   let body: Record<string, string> = {}
   try { body = await req.json() } catch { /* body opcional */ }
 
-  const { date_start, date_end } = Object.keys(body).length && body.date_start
-    ? body
-    : defaultRange()
+  // Prioridade: date_start/date_end explícitos > mode > daily (padrão)
+  const { date_start, date_end } = body.date_start
+    ? { date_start: body.date_start, date_end: body.date_end }
+    : body.mode === 'weekly'
+      ? weeklyRange()
+      : dailyRange()
 
   const filterAccountId: string | undefined = body.account_id
 
@@ -233,7 +262,6 @@ Deno.serve(async (req: Request) => {
     totalErrors   += result.errors
     if (result.errorMsg) errorMsgs.push(`${account.nome}: ${result.errorMsg}`)
 
-    // Pausa entre contas para não sobrecarregar a Meta API
     if (i < accounts.length - 1) {
       await new Promise(r => setTimeout(r, 2_000))
     }

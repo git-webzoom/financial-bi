@@ -16,10 +16,10 @@ export default async function TrafegoPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Intervalo padrão: últimos 30 dias
+  // Intervalo padrão: últimos 7 dias
   const hoje = new Date()
-  const d30  = new Date(hoje); d30.setDate(hoje.getDate() - 30)
-  const inicio = searchParams.inicio ?? dataISO(d30)
+  const d7   = new Date(hoje); d7.setDate(hoje.getDate() - 7)
+  const inicio = searchParams.inicio ?? dataISO(d7)
   const fim    = searchParams.fim    ?? dataISO(hoje)
 
   const conta    = searchParams.conta    ?? ''

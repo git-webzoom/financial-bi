@@ -11,11 +11,11 @@ export default async function VendasPage() {
   const supabase = createClient()
 
   const hoje = new Date()
-  const trintaDiasAtras = new Date()
-  trintaDiasAtras.setDate(hoje.getDate() - 30)
+  const seteDiasAtras = new Date()
+  seteDiasAtras.setDate(hoje.getDate() - 7)
 
-  const dataFim   = dataISOLocal(hoje)
-  const dataInicio = dataISOLocal(trintaDiasAtras)
+  const dataFim    = dataISOLocal(hoje)
+  const dataInicio = dataISOLocal(seteDiasAtras)
   const inicio = dataInicio + 'T00:00:00-03:00'
   const fim    = dataFim    + 'T23:59:59-03:00'
 
