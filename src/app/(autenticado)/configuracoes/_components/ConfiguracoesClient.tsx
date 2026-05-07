@@ -6,7 +6,7 @@ import { formatData } from '@/lib/format'
 import {
   CheckCircle, XCircle, Clock, AlertTriangle,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight, RefreshCw, Loader2,
-  Plus, Trash2, Eye, EyeOff, Save, Zap,
+  Plus, Trash2, Eye, EyeOff, Save, Zap, Users, ShieldCheck, User,
 } from 'lucide-react'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ const WEBHOOK_TABELAS = [
   { tabela: 'raw_grupos_wpp', label: 'Grupos WhatsApp' },
 ]
 
-type Aba = 'integracoes' | 'meta_ads'
+type Aba = 'integracoes' | 'meta_ads' | 'usuarios'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -729,9 +729,454 @@ function AbaMetaAds({
   )
 }
 
+// ─── Aba Usuários ─────────────────────────────────────────────────────────────
+
+interface Usuario {
+  id: string
+  nome: string
+  email: string | null
+  perfil: string
+  ativo: boolean
+  created_at: string
+}
+
+function AbaUsuarios({ meuId }: { meuId: string }) {
+  const [usuarios, setUsuarios]   = useState<Usuario[]>([])
+  const [carregando, setCarregando] = useState(true)
+
+  // Formulário novo usuário
+  const [nome, setNome]       = useState('')
+  const [email, setEmail]     = useState('')
+  const [senha, setSenha]     = useState('')
+  const [perfil, setPerfil]   = useState<'user' | 'admin'>('user')
+  const [showSenha, setShowSenha] = useState(false)
+  const [criando, setCriando] = useState(false)
+  const [formMsg, setFormMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+
+  // Edição inline de senha
+  const [editandoSenhaId, setEditandoSenhaId] = useState<string | null>(null)
+  const [novaSenha, setNovaSenha] = useState('')
+  const [salvandoSenha, setSalvandoSenha] = useState(false)
+
+  const [removendoId, setRemovendoId] = useState<string | null>(null)
+  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+
+  const inputStyle: React.CSSProperties = {
+    backgroundColor: '#0A0A0A',
+    border: '1px solid #333333',
+    color: '#FFFFFF',
+    borderRadius: '0.5rem',
+    padding: '0.5rem 0.75rem',
+    fontSize: '0.875rem',
+    outline: 'none',
+    width: '100%',
+  }
+
+  async function carregar() {
+    setCarregando(true)
+    const res = await fetch('/api/usuarios')
+    const json = await res.json()
+    setUsuarios(json.usuarios ?? [])
+    setCarregando(false)
+  }
+
+  useEffect(() => { carregar() }, [])
+
+  async function criarUsuario() {
+    if (!nome.trim() || !email.trim() || !senha.trim()) return
+    setCriando(true)
+    setFormMsg(null)
+    const res = await fetch('/api/usuarios', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome, email, senha, perfil }),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      setFormMsg({ type: 'err', text: json.error })
+    } else {
+      setUsuarios(prev => [...prev, json.usuario])
+      setNome(''); setEmail(''); setSenha(''); setPerfil('user')
+      setFormMsg({ type: 'ok', text: 'Usuário criado com sucesso.' })
+    }
+    setCriando(false)
+  }
+
+  async function toggleAtivo(u: Usuario) {
+    await fetch('/api/usuarios', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: u.id, ativo: !u.ativo }),
+    })
+    setUsuarios(prev => prev.map(x => x.id === u.id ? { ...x, ativo: !x.ativo } : x))
+  }
+
+  async function alterarPerfil(u: Usuario, novoPerfil: 'user' | 'admin') {
+    await fetch('/api/usuarios', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: u.id, perfil: novoPerfil }),
+    })
+    setUsuarios(prev => prev.map(x => x.id === u.id ? { ...x, perfil: novoPerfil } : x))
+  }
+
+  async function salvarSenha(id: string) {
+    if (novaSenha.length < 6) {
+      setMsg({ type: 'err', text: 'Senha deve ter pelo menos 6 caracteres.' })
+      return
+    }
+    setSalvandoSenha(true)
+    const res = await fetch('/api/usuarios', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, senha: novaSenha }),
+    })
+    const json = await res.json()
+    setSalvandoSenha(false)
+    if (!res.ok) {
+      setMsg({ type: 'err', text: json.error })
+    } else {
+      setMsg({ type: 'ok', text: 'Senha alterada com sucesso.' })
+      setEditandoSenhaId(null)
+      setNovaSenha('')
+    }
+  }
+
+  async function remover(u: Usuario) {
+    if (!confirm(`Remover "${u.nome}"? Esta ação não pode ser desfeita.`)) return
+    setRemovendoId(u.id)
+    const res = await fetch('/api/usuarios', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: u.id }),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      setMsg({ type: 'err', text: json.error })
+    } else {
+      setUsuarios(prev => prev.filter(x => x.id !== u.id))
+    }
+    setRemovendoId(null)
+  }
+
+  return (
+    <div className="space-y-6">
+
+      {/* Feedback global */}
+      {msg && (
+        <div
+          className="px-4 py-3 rounded-lg text-sm flex items-center gap-2"
+          style={{
+            backgroundColor: msg.type === 'ok' ? '#0F2A1A' : '#2A0F0F',
+            color: msg.type === 'ok' ? '#4ADE80' : '#F87171',
+            border: `1px solid ${msg.type === 'ok' ? '#4ADE8033' : '#F8717133'}`,
+          }}
+        >
+          {msg.type === 'ok' ? <CheckCircle className="w-4 h-4 shrink-0" /> : <XCircle className="w-4 h-4 shrink-0" />}
+          {msg.text}
+          <button
+            onClick={() => setMsg(null)}
+            className="ml-auto"
+            style={{ color: 'inherit', opacity: 0.6 }}
+          >
+            <XCircle className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Formulário — Novo Usuário */}
+      <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
+        <div className="px-5 py-4" style={{ borderBottom: '1px solid #1E1E1E' }}>
+          <p className="font-semibold" style={{ color: '#FFFFFF' }}>Novo Usuário</p>
+          <p className="text-xs mt-0.5" style={{ color: '#888888' }}>Crie uma conta de acesso ao sistema</p>
+        </div>
+
+        <div className="px-5 py-4 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Nome completo</label>
+              <input
+                type="text"
+                value={nome}
+                onChange={e => setNome(e.target.value)}
+                placeholder="Ex: João Silva"
+                style={inputStyle}
+                onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                onBlur={e => (e.target.style.borderColor = '#333333')}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>E-mail</label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="joao@empresa.com"
+                style={inputStyle}
+                onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                onBlur={e => (e.target.style.borderColor = '#333333')}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Senha</label>
+              <div className="relative">
+                <input
+                  type={showSenha ? 'text' : 'password'}
+                  value={senha}
+                  onChange={e => setSenha(e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                  style={{ ...inputStyle, paddingRight: '2.5rem' }}
+                  onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                  onBlur={e => (e.target.style.borderColor = '#333333')}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSenha(v => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2"
+                  style={{ color: '#555555' }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#FFFFFF'}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#555555'}
+                >
+                  {showSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Perfil</label>
+              <select
+                value={perfil}
+                onChange={e => setPerfil(e.target.value as 'user' | 'admin')}
+                style={{
+                  backgroundColor: '#0A0A0A',
+                  border: '1px solid #333333',
+                  color: '#FFFFFF',
+                  borderRadius: '0.5rem',
+                  padding: '0.5rem 0.75rem',
+                  fontSize: '0.875rem',
+                  outline: 'none',
+                  width: '100%',
+                }}
+                onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                onBlur={e => (e.target.style.borderColor = '#333333')}
+              >
+                <option value="user">Usuário — acesso padrão</option>
+                <option value="admin">Admin — acesso total</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              onClick={criarUsuario}
+              disabled={criando || !nome.trim() || !email.trim() || !senha.trim()}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+              style={{ backgroundColor: '#C9A84C', color: '#000000' }}
+              onMouseEnter={e => { if (!criando) (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A' }}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C'}
+            >
+              {criando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              Criar Usuário
+            </button>
+            {formMsg && (
+              <p className="text-xs" style={{ color: formMsg.type === 'ok' ? '#4ADE80' : '#F87171' }}>
+                {formMsg.text}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Lista de usuários */}
+      <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
+        <div className="px-5 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid #1E1E1E' }}>
+          <Users className="w-4 h-4" style={{ color: '#C9A84C' }} />
+          <p className="font-semibold" style={{ color: '#FFFFFF' }}>Usuários do Sistema</p>
+          <span className="text-xs ml-auto" style={{ color: '#555555' }}>{usuarios.length} usuário{usuarios.length !== 1 ? 's' : ''}</span>
+        </div>
+
+        {carregando ? (
+          <div className="flex items-center justify-center py-12 gap-2" style={{ color: '#555555' }}>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span className="text-sm">Carregando...</span>
+          </div>
+        ) : usuarios.length === 0 ? (
+          <div className="py-10 text-center text-sm" style={{ color: '#555555' }}>
+            Nenhum usuário encontrado.
+          </div>
+        ) : (
+          <div>
+            {usuarios.map(u => (
+              <div
+                key={u.id}
+                className="px-5 py-4"
+                style={{ borderBottom: '1px solid #1E1E1E' }}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  {/* Info */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-xs font-bold"
+                      style={{ backgroundColor: '#1A1A1A', color: '#C9A84C', border: '1px solid #C9A84C33' }}
+                    >
+                      {u.nome.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium" style={{ color: '#FFFFFF' }}>{u.nome}</p>
+                        {u.perfil === 'admin'
+                          ? <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: '#2A1A0A', color: '#C9A84C' }}>
+                              <ShieldCheck className="w-3 h-3" />Admin
+                            </span>
+                          : <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: '#1A1A1A', color: '#888888' }}>
+                              <User className="w-3 h-3" />Usuário
+                            </span>
+                        }
+                        {!u.ativo && (
+                          <span className="px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: '#2A0F0F', color: '#F87171' }}>Inativo</span>
+                        )}
+                        {u.id === meuId && (
+                          <span className="px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: '#0F1A2A', color: '#60A5FA' }}>Você</span>
+                        )}
+                      </div>
+                      <p className="text-xs mt-0.5" style={{ color: '#555555' }}>{u.email ?? '—'}</p>
+                    </div>
+                  </div>
+
+                  {/* Ações */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* Trocar perfil */}
+                    {u.id !== meuId && (
+                      <button
+                        onClick={() => alterarPerfil(u, u.perfil === 'admin' ? 'user' : 'admin')}
+                        title={u.perfil === 'admin' ? 'Rebaixar para Usuário' : 'Promover para Admin'}
+                        className="p-1.5 rounded-lg transition-colors"
+                        style={{ color: '#888888' }}
+                        onMouseEnter={e => {
+                          (e.currentTarget as HTMLElement).style.color = '#C9A84C'
+                          ;(e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'
+                        }}
+                        onMouseLeave={e => {
+                          (e.currentTarget as HTMLElement).style.color = '#888888'
+                          ;(e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
+                        }}
+                      >
+                        <ShieldCheck className="w-4 h-4" />
+                      </button>
+                    )}
+                    {/* Trocar senha */}
+                    <button
+                      onClick={() => {
+                        setEditandoSenhaId(editandoSenhaId === u.id ? null : u.id)
+                        setNovaSenha('')
+                        setMsg(null)
+                      }}
+                      title="Alterar senha"
+                      className="p-1.5 rounded-lg transition-colors"
+                      style={{ color: '#888888' }}
+                      onMouseEnter={e => {
+                        (e.currentTarget as HTMLElement).style.color = '#60A5FA'
+                        ;(e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'
+                      }}
+                      onMouseLeave={e => {
+                        (e.currentTarget as HTMLElement).style.color = '#888888'
+                        ;(e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
+                      }}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    {/* Ativar / Desativar */}
+                    {u.id !== meuId && (
+                      <button
+                        onClick={() => toggleAtivo(u)}
+                        title={u.ativo ? 'Desativar' : 'Ativar'}
+                        className="p-1.5 rounded-lg transition-colors"
+                        style={{ color: '#888888' }}
+                        onMouseEnter={e => {
+                          (e.currentTarget as HTMLElement).style.color = '#FB923C'
+                          ;(e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'
+                        }}
+                        onMouseLeave={e => {
+                          (e.currentTarget as HTMLElement).style.color = '#888888'
+                          ;(e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
+                        }}
+                      >
+                        {u.ativo ? <XCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                      </button>
+                    )}
+                    {/* Remover */}
+                    {u.id !== meuId && (
+                      <button
+                        onClick={() => remover(u)}
+                        disabled={removendoId === u.id}
+                        title="Remover usuário"
+                        className="p-1.5 rounded-lg transition-colors disabled:opacity-40"
+                        style={{ color: '#888888' }}
+                        onMouseEnter={e => {
+                          (e.currentTarget as HTMLElement).style.color = '#F87171'
+                          ;(e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'
+                        }}
+                        onMouseLeave={e => {
+                          (e.currentTarget as HTMLElement).style.color = '#888888'
+                          ;(e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
+                        }}
+                      >
+                        {removendoId === u.id
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <Trash2 className="w-4 h-4" />
+                        }
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Formulário inline de nova senha */}
+                {editandoSenhaId === u.id && (
+                  <div className="mt-3 flex items-center gap-2" style={{ paddingLeft: '3rem' }}>
+                    <input
+                      type="password"
+                      value={novaSenha}
+                      onChange={e => setNovaSenha(e.target.value)}
+                      placeholder="Nova senha (mín. 6 caracteres)"
+                      className="flex-1 px-3 py-1.5 text-sm rounded-lg outline-none"
+                      style={{ backgroundColor: '#0A0A0A', border: '1px solid #333333', color: '#FFFFFF' }}
+                      onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                      onBlur={e => (e.target.style.borderColor = '#333333')}
+                      onKeyDown={e => e.key === 'Enter' && salvarSenha(u.id)}
+                    />
+                    <button
+                      onClick={() => salvarSenha(u.id)}
+                      disabled={salvandoSenha || novaSenha.length < 6}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg disabled:opacity-50 transition-opacity"
+                      style={{ backgroundColor: '#C9A84C', color: '#000000' }}
+                      onMouseEnter={e => { if (!salvandoSenha) (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A' }}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C'}
+                    >
+                      {salvandoSenha ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                      Salvar
+                    </button>
+                    <button
+                      onClick={() => { setEditandoSenhaId(null); setNovaSenha('') }}
+                      className="px-3 py-1.5 text-xs rounded-lg transition-colors"
+                      style={{ border: '1px solid #333333', color: '#888888', backgroundColor: 'transparent' }}
+                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-export default function ConfiguracoesClient({ inicial }: { inicial: DadosConfiguracao }) {
+export default function ConfiguracoesClient({ inicial, meuId }: { inicial: DadosConfiguracao; meuId: string }) {
   const supabase = createClient()
   const [aba, setAba] = useState<Aba>('integracoes')
   const [dados, setDados] = useState<DadosConfiguracao>(inicial)
@@ -798,6 +1243,7 @@ export default function ConfiguracoesClient({ inicial }: { inicial: DadosConfigu
   const abas: { key: Aba; label: string }[] = [
     { key: 'integracoes', label: 'Integrações' },
     { key: 'meta_ads',    label: 'Meta Ads' },
+    { key: 'usuarios',    label: 'Usuários' },
   ]
 
   return (
@@ -872,6 +1318,10 @@ export default function ConfiguracoesClient({ inicial }: { inicial: DadosConfigu
           metaAccounts={dados.metaAccounts}
           onRefresh={buscarDados}
         />
+      )}
+
+      {aba === 'usuarios' && (
+        <AbaUsuarios meuId={meuId} />
       )}
     </div>
   )

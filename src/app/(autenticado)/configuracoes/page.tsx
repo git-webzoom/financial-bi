@@ -65,5 +65,5 @@ export default async function ConfiguracoesPage() {
     metaToken: metaToken ?? null,
   }
 
-  return <ConfiguracoesClient inicial={inicial} />
+  return <ConfiguracoesClient inicial={inicial} meuId={user.id} />
 }
