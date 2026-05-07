@@ -77,7 +77,7 @@ const WEBHOOK_TABELAS = [
   { tabela: 'raw_grupos_wpp', label: 'Grupos WhatsApp' },
 ]
 
-type Aba = 'integracoes' | 'meta_ads' | 'usuarios'
+type Aba = 'integracoes' | 'meta_ads' | 'activecampaign' | 'usuarios'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -1174,6 +1174,216 @@ function AbaUsuarios({ meuId }: { meuId: string }) {
   )
 }
 
+// ─── Aba ActiveCampaign ───────────────────────────────────────────────────────
+
+function AbaActiveCampaign({
+  token, onRefresh,
+}: {
+  token: Token | null
+  onRefresh: () => void
+}) {
+  const [apiToken, setApiToken]       = useState('')
+  const [showToken, setShowToken]     = useState(false)
+  const [savingToken, setSavingToken] = useState(false)
+  const [tokenMsg, setTokenMsg]       = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+
+  const [syncing, setSyncing]   = useState(false)
+  const [syncMsg, setSyncMsg]   = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [semanas, setSemanas]   = useState('')
+
+  const inputStyle: React.CSSProperties = {
+    backgroundColor: '#0A0A0A',
+    border: '1px solid #333333',
+    color: '#FFFFFF',
+    borderRadius: '0.5rem',
+    padding: '0.5rem 0.75rem',
+    fontSize: '0.875rem',
+    outline: 'none',
+    width: '100%',
+  }
+
+  async function salvarToken() {
+    if (!apiToken.trim()) return
+    setSavingToken(true)
+    setTokenMsg(null)
+    try {
+      const res = await fetch('/api/activecampaign/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: apiToken.trim() }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error)
+      setApiToken('')
+      setTokenMsg({ type: 'ok', text: 'Token salvo com sucesso.' })
+      onRefresh()
+    } catch (e: unknown) {
+      setTokenMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro ao salvar token.' })
+    } finally {
+      setSavingToken(false)
+    }
+  }
+
+  async function sincronizar() {
+    setSyncing(true)
+    setSyncMsg(null)
+    try {
+      const body: { semanas?: number[] } = {}
+      if (semanas.trim()) {
+        const nums = semanas.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n))
+        if (nums.length > 0) body.semanas = nums
+      }
+      const res = await fetch('/api/activecampaign/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Erro desconhecido')
+      const erros = json.records_error ?? 0
+      setSyncMsg({
+        type: erros > 0 ? 'err' : 'ok',
+        text: `Concluído — ${json.records_fetched ?? 0} buscados, ${json.records_inserted ?? 0} inseridos${erros > 0 ? `, ${erros} erros` : ''}.`,
+      })
+      onRefresh()
+    } catch (e: unknown) {
+      setSyncMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro ao sincronizar.' })
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+
+      {/* Token */}
+      <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
+        <div className="px-5 py-4" style={{ borderBottom: '1px solid #1E1E1E' }}>
+          <div className="flex items-center gap-3">
+            <span className="text-xl">🔑</span>
+            <div className="flex-1">
+              <p className="font-semibold" style={{ color: '#FFFFFF' }}>API Token</p>
+              <p className="text-xs mt-0.5" style={{ color: '#888888' }}>
+                Encontre em ActiveCampaign → Settings → Developer → API Access
+              </p>
+            </div>
+            {token?.ativo
+              ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#0F2A1A', color: '#4ADE80' }}><CheckCircle className="w-3 h-3" />Configurado</span>
+              : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#1A1A1A', color: '#888888' }}><XCircle className="w-3 h-3" />Não configurado</span>
+            }
+          </div>
+        </div>
+
+        <div className="px-5 py-4 space-y-3">
+          {token && (
+            <div className="flex items-center gap-6 text-xs pb-1" style={{ color: '#555555' }}>
+              <span className="flex items-center gap-1"><Clock className="w-3 h-3" />Última sync: {formatData(token.last_sync_at)}</span>
+              <BadgeStatus status={token.last_sync_status} />
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <input
+                type={showToken ? 'text' : 'password'}
+                value={apiToken}
+                onChange={e => setApiToken(e.target.value)}
+                placeholder={token ? 'Novo token (deixe vazio para manter o atual)' : 'Cole seu API token aqui'}
+                style={{ ...inputStyle, paddingRight: '2.5rem', fontFamily: 'monospace' }}
+                onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                onBlur={e => (e.target.style.borderColor = '#333333')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowToken(v => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2"
+                style={{ color: '#555555' }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#FFFFFF'}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#555555'}
+              >
+                {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <button
+              onClick={salvarToken}
+              disabled={savingToken || !apiToken.trim()}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+              style={{ backgroundColor: '#C9A84C', color: '#000000' }}
+              onMouseEnter={e => { if (!savingToken && apiToken.trim()) (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A' }}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C'}
+            >
+              {savingToken ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Salvar
+            </button>
+          </div>
+
+          {tokenMsg && (
+            <p className="text-xs" style={{ color: tokenMsg.type === 'ok' ? '#4ADE80' : '#F87171' }}>
+              {tokenMsg.text}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Sincronização manual */}
+      <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
+        <div className="px-5 py-4 flex items-center justify-between gap-4" style={{ borderBottom: '1px solid #1E1E1E' }}>
+          <div>
+            <p className="font-semibold" style={{ color: '#FFFFFF' }}>Sincronização Manual — Webinário</p>
+            <p className="text-xs mt-0.5" style={{ color: '#888888' }}>
+              Busca inscritos nas tags de semana do ActiveCampaign e salva no banco
+            </p>
+          </div>
+        </div>
+
+        <div className="px-5 py-4 space-y-3">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={semanas}
+              onChange={e => setSemanas(e.target.value)}
+              placeholder="Semanas (ex: 172,173) — vazio = últimas 5"
+              style={inputStyle}
+              onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+              onBlur={e => (e.target.style.borderColor = '#333333')}
+            />
+            <button
+              onClick={sincronizar}
+              disabled={syncing || !token?.ativo}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shrink-0"
+              style={{ backgroundColor: '#C9A84C', color: '#000000' }}
+              onMouseEnter={e => { if (!syncing) (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A' }}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C'}
+              title={!token?.ativo ? 'Configure o token primeiro' : 'Sincronizar agora'}
+            >
+              {syncing
+                ? <><Loader2 className="w-4 h-4 animate-spin" />Sincronizando…</>
+                : <><RefreshCw className="w-4 h-4" />Sincronizar</>
+              }
+            </button>
+          </div>
+
+          {syncMsg && (
+            <div
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
+              style={{
+                backgroundColor: syncMsg.type === 'ok' ? '#0F2A1A' : '#2A0F0F',
+                color: syncMsg.type === 'ok' ? '#4ADE80' : '#F87171',
+              }}
+            >
+              {syncMsg.type === 'ok' ? <CheckCircle className="w-3.5 h-3.5 shrink-0" /> : <XCircle className="w-3.5 h-3.5 shrink-0" />}
+              {syncMsg.text}
+            </div>
+          )}
+
+          <p className="text-xs" style={{ color: '#555555' }}>
+            A sincronização pode levar alguns minutos dependendo do número de contatos. O resultado aparecerá acima quando concluir.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function ConfiguracoesClient({ inicial, meuId }: { inicial: DadosConfiguracao; meuId: string }) {
@@ -1241,9 +1451,10 @@ export default function ConfiguracoesClient({ inicial, meuId }: { inicial: Dados
   }
 
   const abas: { key: Aba; label: string }[] = [
-    { key: 'integracoes', label: 'Integrações' },
-    { key: 'meta_ads',    label: 'Meta Ads' },
-    { key: 'usuarios',    label: 'Usuários' },
+    { key: 'integracoes',     label: 'Integrações' },
+    { key: 'meta_ads',        label: 'Meta Ads' },
+    { key: 'activecampaign',  label: 'ActiveCampaign' },
+    { key: 'usuarios',        label: 'Usuários' },
   ]
 
   return (
@@ -1316,6 +1527,13 @@ export default function ConfiguracoesClient({ inicial, meuId }: { inicial: Dados
         <AbaMetaAds
           metaToken={dados.metaToken}
           metaAccounts={dados.metaAccounts}
+          onRefresh={buscarDados}
+        />
+      )}
+
+      {aba === 'activecampaign' && (
+        <AbaActiveCampaign
+          token={dados.tokens.find(t => t.integration === 'activecampaign') ?? null}
           onRefresh={buscarDados}
         />
       )}
