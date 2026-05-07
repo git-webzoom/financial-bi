@@ -1,0 +1,4 @@
+-- Extensões base do sistema
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pg_cron";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
