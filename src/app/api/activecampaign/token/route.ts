@@ -22,10 +22,16 @@ export async function POST(req: NextRequest) {
   const user = await verificarAdmin()
   if (!user) return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
 
-  const { token } = await req.json()
+  const { token, base_url } = await req.json()
   if (!token?.trim()) {
     return NextResponse.json({ error: 'Token é obrigatório' }, { status: 400 })
   }
+  if (!base_url?.trim()) {
+    return NextResponse.json({ error: 'URL base é obrigatória' }, { status: 400 })
+  }
+
+  // Normaliza: remove trailing slash e /api/3 se o usuário colou a URL completa
+  const normalizedUrl = base_url.trim().replace(/\/api\/3\/?$/, '').replace(/\/$/, '')
 
   const admin = adminClient()
 
@@ -36,6 +42,7 @@ export async function POST(req: NextRequest) {
         integration:      'activecampaign',
         vault_key:        token.trim(),
         ativo:            true,
+        config:           { base_url: normalizedUrl },
         last_sync_at:     null,
         last_sync_status: null,
       },

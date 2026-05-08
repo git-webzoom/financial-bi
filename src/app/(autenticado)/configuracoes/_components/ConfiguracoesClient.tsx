@@ -245,13 +245,222 @@ function CardIntegracao({
   )
 }
 
+interface WebhookDetalhe {
+  id: string
+  error: string
+  payload: Record<string, unknown>
+  received_at: string
+}
+
+function ModalWebhook({ wh, onClose }: { wh: WebhookDetalhe; onClose: () => void }) {
+  const email   = (wh.payload?.contact as Record<string, unknown>)?.email as string | undefined
+  const nome    = (wh.payload?.contact as Record<string, unknown>)?.name  as string | undefined
+  const status  = wh.payload?.status as string | undefined
+  const produto = (wh.payload?.product as Record<string, unknown>)?.name  as string | undefined
+  const valor   = (wh.payload?.payment as Record<string, unknown>)?.total as number | undefined
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-2xl rounded-xl overflow-hidden flex flex-col"
+        style={{ backgroundColor: '#111111', border: '1px solid #333333', maxHeight: '85vh' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="px-5 py-4 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid #1E1E1E' }}>
+          <AlertTriangle className="w-5 h-5 shrink-0" style={{ color: '#F87171' }} />
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm" style={{ color: '#FFFFFF' }}>Detalhe do Erro</p>
+            <p className="text-xs mt-0.5 font-mono truncate" style={{ color: '#555555' }}>{wh.id}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg shrink-0"
+            style={{ color: '#888888' }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#FFFFFF'}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#888888'}
+          >
+            <XCircle className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
+          {/* Erro */}
+          <div className="px-4 py-3 rounded-lg" style={{ backgroundColor: '#2A0F0F', border: '1px solid #F8717133' }}>
+            <p className="text-xs font-medium mb-1" style={{ color: '#888888' }}>MENSAGEM DE ERRO</p>
+            <p className="text-sm font-mono" style={{ color: '#F87171' }}>{wh.error}</p>
+          </div>
+
+          {/* Resumo */}
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: 'Recebido em', value: new Date(wh.received_at).toLocaleString('pt-BR') },
+              { label: 'Status', value: status ?? '—' },
+              { label: 'E-mail', value: email ?? '—' },
+              { label: 'Nome', value: nome ?? '—' },
+              { label: 'Produto', value: produto ?? '—' },
+              { label: 'Valor', value: valor != null ? `R$ ${Number(valor).toFixed(2)}` : '—' },
+            ].map(({ label, value }) => (
+              <div key={label} className="px-3 py-2 rounded-lg" style={{ backgroundColor: '#0A0A0A', border: '1px solid #222222' }}>
+                <p className="text-xs mb-0.5" style={{ color: '#555555' }}>{label}</p>
+                <p className="text-sm truncate" style={{ color: '#FFFFFF' }}>{value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Payload completo */}
+          <div>
+            <p className="text-xs font-medium mb-2" style={{ color: '#555555' }}>PAYLOAD COMPLETO</p>
+            <pre
+              className="text-xs rounded-lg p-4 overflow-x-auto"
+              style={{ backgroundColor: '#0A0A0A', border: '1px solid #222222', color: '#888888', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
+            >
+              {JSON.stringify(wh.payload, null, 2)}
+            </pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SecaoWebhookTabela({
+  tabela, label, count, onReprocessar,
+}: {
+  tabela: string
+  label: string
+  count: number
+  onReprocessar: (tabela: string) => Promise<void>
+}) {
+  const [aberto, setAberto]               = useState(false)
+  const [carregando, setCarregando]       = useState(false)
+  const [reprocessando, setReprocessando] = useState(false)
+  const [webhooks, setWebhooks]           = useState<WebhookDetalhe[]>([])
+  const [selecionado, setSelecionado]     = useState<WebhookDetalhe | null>(null)
+
+  async function abrir() {
+    if (aberto) { setAberto(false); return }
+    if (count === 0) return
+    setAberto(true)
+    setCarregando(true)
+    const res = await fetch(`/api/webhooks-erro?tabela=${tabela}`)
+    const json = await res.json()
+    setWebhooks(json.webhooks ?? [])
+    setCarregando(false)
+  }
+
+  async function reprocessar() {
+    setReprocessando(true)
+    await onReprocessar(tabela)
+    setWebhooks([])
+    setAberto(false)
+    setReprocessando(false)
+  }
+
+  return (
+    <>
+      {selecionado && <ModalWebhook wh={selecionado} onClose={() => setSelecionado(null)} />}
+
+      <div style={{ borderBottom: '1px solid #1E1E1E' }}>
+        {/* Linha principal */}
+        <div className="px-5 py-3 flex items-center justify-between gap-4">
+          <button
+            onClick={abrir}
+            disabled={count === 0}
+            className="flex items-center gap-2 text-left flex-1 disabled:cursor-default"
+          >
+            <div>
+              <p className="text-sm font-medium" style={{ color: '#FFFFFF' }}>{label}</p>
+              <p className="text-xs mt-0.5">
+                {count === 0
+                  ? <span style={{ color: '#555555' }}>Nenhuma falha</span>
+                  : <span className="font-medium" style={{ color: '#F87171' }}>{count} webhook{count > 1 ? 's' : ''} com erro</span>
+                }
+              </p>
+            </div>
+            {count > 0 && (
+              aberto
+                ? <ChevronUp className="w-4 h-4 shrink-0" style={{ color: '#555555' }} />
+                : <ChevronDown className="w-4 h-4 shrink-0" style={{ color: '#555555' }} />
+            )}
+          </button>
+
+          <button
+            onClick={reprocessar}
+            disabled={count === 0 || reprocessando}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+            style={{ border: '1px solid #333333', color: '#888888', backgroundColor: 'transparent' }}
+            onMouseEnter={e => { if (count > 0 && !reprocessando) (e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A' }}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}
+          >
+            {reprocessando ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Reprocessando…</> : <><RefreshCw className="w-3.5 h-3.5" />Reprocessar</>}
+          </button>
+        </div>
+
+        {/* Lista expandida */}
+        {aberto && (
+          <div style={{ backgroundColor: '#0A0A0A', borderTop: '1px solid #1E1E1E' }}>
+            {carregando ? (
+              <div className="flex items-center gap-2 px-5 py-4 text-xs" style={{ color: '#555555' }}>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />Carregando falhas…
+              </div>
+            ) : webhooks.length === 0 ? (
+              <p className="px-5 py-4 text-xs" style={{ color: '#555555' }}>Nenhum webhook encontrado.</p>
+            ) : (
+              <>
+                <div
+                  className="grid gap-2 px-5 py-1.5 text-xs font-medium"
+                  style={{ gridTemplateColumns: '1fr 2fr 1fr', color: '#555555', borderBottom: '1px solid #1E1E1E' }}
+                >
+                  <span>Recebido</span>
+                  <span>Erro</span>
+                  <span />
+                </div>
+                {webhooks.map(wh => {
+                  const email = (wh.payload?.contact as Record<string, unknown>)?.email as string | undefined
+                  return (
+                    <div
+                      key={wh.id}
+                      className="grid gap-2 px-5 py-2.5 items-center cursor-pointer transition-colors"
+                      style={{ gridTemplateColumns: '1fr 2fr 1fr', borderBottom: '1px solid #1A1A1A' }}
+                      onClick={() => setSelecionado(wh)}
+                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#111111'}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}
+                    >
+                      <div>
+                        <p className="text-xs" style={{ color: '#888888' }}>
+                          {new Date(wh.received_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        {email && <p className="text-xs mt-0.5 truncate" style={{ color: '#555555' }}>{email}</p>}
+                      </div>
+                      <p className="text-xs truncate" style={{ color: '#F87171' }}>{wh.error}</p>
+                      <div className="flex justify-end">
+                        <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: '#1A1A1A', color: '#888888' }}>
+                          Ver detalhes →
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
 function CardWebhooksErro({
   webhookErros, onReprocessar,
 }: {
   webhookErros: WebhookErro[]
   onReprocessar: (tabela: string) => Promise<void>
 }) {
-  const [reprocessando, setReprocessando] = useState<string | null>(null)
   const totalErros = webhookErros.reduce((s, w) => s + w.count, 0)
 
   return (
@@ -265,39 +474,18 @@ function CardWebhooksErro({
         {totalErros > 0 && (
           <span className="px-2 py-0.5 rounded-full text-xs font-bold" style={{ backgroundColor: '#2A0F0F', color: '#F87171' }}>{totalErros}</span>
         )}
+        <p className="text-xs ml-auto" style={{ color: '#555555' }}>Clique na linha para ver o erro</p>
       </div>
       <div>
-        {WEBHOOK_TABELAS.map(({ tabela, label }) => {
-          const count = webhookErros.find(w => w.tabela === tabela)?.count ?? 0
-          const loading = reprocessando === tabela
-          return (
-            <div
-              key={tabela}
-              className="px-5 py-3 flex items-center justify-between gap-4"
-              style={{ borderBottom: '1px solid #1E1E1E' }}
-            >
-              <div>
-                <p className="text-sm font-medium" style={{ color: '#FFFFFF' }}>{label}</p>
-                <p className="text-xs mt-0.5">
-                  {count === 0
-                    ? <span style={{ color: '#555555' }}>Nenhuma falha</span>
-                    : <span className="font-medium" style={{ color: '#F87171' }}>{count} webhook{count > 1 ? 's' : ''} com erro</span>
-                  }
-                </p>
-              </div>
-              <button
-                onClick={async () => { setReprocessando(tabela); await onReprocessar(tabela); setReprocessando(null) }}
-                disabled={count === 0 || loading}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                style={{ border: '1px solid #333333', color: '#888888', backgroundColor: 'transparent' }}
-                onMouseEnter={e => { if (count > 0 && !loading) (e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A' }}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}
-              >
-                {loading ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Reprocessando…</> : <><RefreshCw className="w-3.5 h-3.5" />Reprocessar</>}
-              </button>
-            </div>
-          )
-        })}
+        {WEBHOOK_TABELAS.map(({ tabela, label }) => (
+          <SecaoWebhookTabela
+            key={tabela}
+            tabela={tabela}
+            label={label}
+            count={webhookErros.find(w => w.tabela === tabela)?.count ?? 0}
+            onReprocessar={onReprocessar}
+          />
+        ))}
       </div>
     </div>
   )
@@ -1182,7 +1370,9 @@ function AbaActiveCampaign({
   token: Token | null
   onRefresh: () => void
 }) {
+  const supabase = createClient()
   const [apiToken, setApiToken]       = useState('')
+  const [baseUrl, setBaseUrl]         = useState('')
   const [showToken, setShowToken]     = useState(false)
   const [savingToken, setSavingToken] = useState(false)
   const [tokenMsg, setTokenMsg]       = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
@@ -1203,21 +1393,22 @@ function AbaActiveCampaign({
   }
 
   async function salvarToken() {
-    if (!apiToken.trim()) return
+    if (!apiToken.trim() || !baseUrl.trim()) return
     setSavingToken(true)
     setTokenMsg(null)
     try {
       const res = await fetch('/api/activecampaign/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: apiToken.trim() }),
+        body: JSON.stringify({ token: apiToken.trim(), base_url: baseUrl.trim() }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
       setApiToken('')
-      setTokenMsg({ type: 'ok', text: 'Token salvo com sucesso.' })
+      setBaseUrl('')
+      setTokenMsg({ type: 'ok', text: 'Token e URL salvos com sucesso.' })
       onRefresh()
     } catch (e: unknown) {
-      setTokenMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro ao salvar token.' })
+      setTokenMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro ao salvar.' })
     } finally {
       setSavingToken(false)
     }
@@ -1239,12 +1430,57 @@ function AbaActiveCampaign({
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Erro desconhecido')
-      const erros = json.records_error ?? 0
-      setSyncMsg({
-        type: erros > 0 ? 'err' : 'ok',
-        text: `Concluído — ${json.records_fetched ?? 0} buscados, ${json.records_inserted ?? 0} inseridos${erros > 0 ? `, ${erros} erros` : ''}.`,
-      })
-      onRefresh()
+
+      // Edge function responde imediatamente com { status: 'started', jobs: [...] }
+      // Fazer polling até todos os jobs terminarem
+      const jobIds: string[] = json.jobs ?? []
+      if (jobIds.length === 0) throw new Error('Nenhum job iniciado')
+
+      setSyncMsg({ type: 'ok', text: `Processando ${json.semanas?.length ?? 1} semana(s) em background…` })
+
+      const INTERVALO = 4000
+      const TIMEOUT   = 30 * 60 * 1000 // 30 min máximo de polling
+      const inicio    = Date.now()
+
+      while (true) {
+        await new Promise(r => setTimeout(r, INTERVALO))
+
+        const { data: jobs } = await supabase
+          .from('integration_job_runs')
+          .select('id, status, records_fetched, records_inserted, records_error, error_message')
+          .in('id', jobIds)
+
+        const todos = jobs ?? []
+        const pendentes = todos.filter(j => j.status === 'running')
+
+        if (pendentes.length === 0) {
+          // Todos terminaram
+          const totalFetched   = todos.reduce((s, j) => s + (j.records_fetched   ?? 0), 0)
+          const totalInserted  = todos.reduce((s, j) => s + (j.records_inserted  ?? 0), 0)
+          const totalErros     = todos.reduce((s, j) => s + (j.records_error     ?? 0), 0)
+          const temErro        = todos.some(j => j.status === 'error')
+          const temPartial     = todos.some(j => j.status === 'partial')
+          const msgErro        = todos.find(j => j.error_message)?.error_message
+
+          setSyncMsg({
+            type: temErro && totalFetched === 0 ? 'err' : 'ok',
+            text: temErro && totalFetched === 0
+              ? `Erro: ${msgErro ?? 'falha no processamento'}`
+              : `Concluído${temPartial ? ' com avisos' : ''} — ${totalFetched} buscados, ${totalInserted} inseridos${totalErros > 0 ? `, ${totalErros} erros` : ''}`,
+          })
+          onRefresh()
+          break
+        }
+
+        // Atualiza mensagem com progresso parcial
+        const concluidos = todos.length - pendentes.length
+        setSyncMsg({ type: 'ok', text: `Processando… ${concluidos}/${todos.length} semana(s) concluída(s)` })
+
+        if (Date.now() - inicio > TIMEOUT) {
+          setSyncMsg({ type: 'err', text: 'Timeout: o processamento está demorando mais que o esperado. Verifique o log de integrações.' })
+          break
+        }
+      }
     } catch (e: unknown) {
       setSyncMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro ao sincronizar.' })
     } finally {
@@ -1281,39 +1517,52 @@ function AbaActiveCampaign({
             </div>
           )}
 
-          <div className="flex gap-2">
-            <div className="relative flex-1">
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  type={showToken ? 'text' : 'password'}
+                  value={apiToken}
+                  onChange={e => setApiToken(e.target.value)}
+                  placeholder={token ? 'Novo API token (deixe vazio para manter)' : 'Cole seu API token aqui'}
+                  style={{ ...inputStyle, paddingRight: '2.5rem', fontFamily: 'monospace' }}
+                  onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                  onBlur={e => (e.target.style.borderColor = '#333333')}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowToken(v => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2"
+                  style={{ color: '#555555' }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#FFFFFF'}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#555555'}
+                >
+                  {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="flex gap-2">
               <input
-                type={showToken ? 'text' : 'password'}
-                value={apiToken}
-                onChange={e => setApiToken(e.target.value)}
-                placeholder={token ? 'Novo token (deixe vazio para manter o atual)' : 'Cole seu API token aqui'}
-                style={{ ...inputStyle, paddingRight: '2.5rem', fontFamily: 'monospace' }}
+                type="text"
+                value={baseUrl}
+                onChange={e => setBaseUrl(e.target.value)}
+                placeholder="URL base (ex: https://suaconta.api-us1.com)"
+                style={{ ...inputStyle, fontFamily: 'monospace' }}
                 onFocus={e => (e.target.style.borderColor = '#C9A84C')}
                 onBlur={e => (e.target.style.borderColor = '#333333')}
               />
               <button
-                type="button"
-                onClick={() => setShowToken(v => !v)}
-                className="absolute right-2 top-1/2 -translate-y-1/2"
-                style={{ color: '#555555' }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#FFFFFF'}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#555555'}
+                onClick={salvarToken}
+                disabled={savingToken || !apiToken.trim() || !baseUrl.trim()}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shrink-0"
+                style={{ backgroundColor: '#C9A84C', color: '#000000' }}
+                onMouseEnter={e => { if (!savingToken && apiToken.trim() && baseUrl.trim()) (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A' }}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C'}
               >
-                {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {savingToken ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Salvar
               </button>
             </div>
-            <button
-              onClick={salvarToken}
-              disabled={savingToken || !apiToken.trim()}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-              style={{ backgroundColor: '#C9A84C', color: '#000000' }}
-              onMouseEnter={e => { if (!savingToken && apiToken.trim()) (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A' }}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C'}
-            >
-              {savingToken ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Salvar
-            </button>
           </div>
 
           {tokenMsg && (
@@ -1376,7 +1625,7 @@ function AbaActiveCampaign({
           )}
 
           <p className="text-xs" style={{ color: '#555555' }}>
-            A sincronização pode levar alguns minutos dependendo do número de contatos. O resultado aparecerá acima quando concluir.
+            O processamento roda em background. Esta tela aguarda automaticamente e exibe o resultado quando terminar.
           </p>
         </div>
       </div>

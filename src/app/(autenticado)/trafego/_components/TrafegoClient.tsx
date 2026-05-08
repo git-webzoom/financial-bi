@@ -97,15 +97,30 @@ export default function TrafegoClient({ inicial, filtrosDefault, pageSize }: Pro
       if (f.adset)    kpiQ = kpiQ.eq('adset_name', f.adset)
       const { data: kpiRows } = await kpiQ
 
+      // Alcance deduplcado: sem campanha/adset usa trafego_reach (nível de conta, igual BM)
+      let alcance = 0
+      if (!f.campanha && !f.adset) {
+        let reachQ = supabase
+          .from('trafego_reach')
+          .select('reach')
+          .gte('date_ref', f.inicio)
+          .lte('date_ref', f.fim)
+        if (f.conta) reachQ = reachQ.eq('ad_account_id', f.conta)
+        const { data: reachRows } = await reachQ
+        alcance = (reachRows ?? []).reduce((s, r) => s + (r.reach ?? 0), 0)
+      } else {
+        alcance = (kpiRows ?? []).reduce((s, r) => s + (r.reach ?? 0), 0)
+      }
+
       const novosKpis = (kpiRows ?? []).reduce(
         (acc, r) => ({
           investido:  acc.investido  + (r.amount_spent ?? 0),
           impressoes: acc.impressoes + (r.impressions  ?? 0),
           cliques:    acc.cliques    + (r.link_clicks  ?? 0),
-          alcance:    acc.alcance    + (r.reach        ?? 0),
+          alcance:    acc.alcance,
           leads:      acc.leads      + (r.leads        ?? 0),
         }),
-        { investido: 0, impressoes: 0, cliques: 0, alcance: 0, leads: 0 }
+        { investido: 0, impressoes: 0, cliques: 0, alcance, leads: 0 }
       )
       setKpis(novosKpis)
 

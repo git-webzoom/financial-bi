@@ -66,15 +66,31 @@ export default async function TrafegoPage({
   if (adset)    kpiQuery = kpiQuery.eq('adset_name', adset)
   const { data: kpiRows } = await kpiQuery
 
+  // Alcance deduplcado: sem filtro de campanha/adset usa trafego_reach (nível de conta, igual BM)
+  // Com filtro de campanha/adset usa reach somado dos anúncios filtrados
+  let alcance = 0
+  if (!campanha && !adset) {
+    let reachQuery = supabase
+      .from('trafego_reach')
+      .select('reach')
+      .gte('date_ref', inicio)
+      .lte('date_ref', fim)
+    if (conta) reachQuery = reachQuery.eq('ad_account_id', conta)
+    const { data: reachRows } = await reachQuery
+    alcance = (reachRows ?? []).reduce((s, r) => s + (r.reach ?? 0), 0)
+  } else {
+    alcance = (kpiRows ?? []).reduce((s, r) => s + (r.reach ?? 0), 0)
+  }
+
   const kpis = (kpiRows ?? []).reduce(
     (acc, r) => ({
       investido:   acc.investido   + (r.amount_spent ?? 0),
       impressoes:  acc.impressoes  + (r.impressions  ?? 0),
       cliques:     acc.cliques     + (r.link_clicks  ?? 0),
-      alcance:     acc.alcance     + (r.reach        ?? 0),
+      alcance:     acc.alcance,
       leads:       acc.leads       + (r.leads        ?? 0),
     }),
-    { investido: 0, impressoes: 0, cliques: 0, alcance: 0, leads: 0 }
+    { investido: 0, impressoes: 0, cliques: 0, alcance, leads: 0 }
   )
 
   // Gráfico: investimento e leads por dia

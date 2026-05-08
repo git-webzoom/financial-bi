@@ -285,6 +285,8 @@ export default function VendasClient({
   const [status, setStatus]         = useState('')
   const [pagamento, setPagamento]   = useState('')
   const [marketplace, setMarketplace] = useState('')
+  const [emailsFiltro, setEmailsFiltro] = useState<string[]>([])
+  const [todasVendasEmails, setTodasVendasEmails] = useState<Venda[]>([])
 
   const [vendas, setVendas]   = useState<Venda[]>(initialVendas)
   const [total, setTotal]     = useState(initialTotal)
@@ -295,9 +297,60 @@ export default function VendasClient({
 
   const totalPaginas = Math.ceil(total / PAGE_SIZE)
 
+  // Lê filtro de e-mails vindo do CRM (card Compradores)
+  useEffect(() => {
+    const raw = sessionStorage.getItem('vendas_filtro_emails')
+    if (!raw) return
+    sessionStorage.removeItem('vendas_filtro_emails')
+    try {
+      const emails: string[] = JSON.parse(raw)
+      if (emails.length > 0) {
+        setEmailsFiltro(emails)
+        buscarComEmails(emails)
+      }
+    } catch { /* ignorar */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const STATUS_APROVADO = ['approved', 'complete', 'completed', 'paid', 'active', 'confirmed']
+
+  const calcularKpisLocais = useCallback((todasVendas: Venda[]) => {
+    const aprovadas = todasVendas.filter(v => STATUS_APROVADO.includes(v.status))
+    const bruto     = aprovadas.reduce((s, v) => s + (v.valor_venda   ?? 0), 0)
+    const liquido   = aprovadas.reduce((s, v) => s + (v.valor_liquido ?? 0), 0)
+    const nVendas   = aprovadas.length
+    setKpis({
+      faturamentoBruto:   bruto,
+      faturamentoLiquido: liquido,
+      totalVendas:        nVendas,
+      ticketMedio:        nVendas > 0 ? bruto / nVendas : 0,
+      reembolsos:         todasVendas.filter(v => ['refunded','refunded_sol'].includes(v.status)).length,
+      chargebacks:        todasVendas.filter(v => v.status === 'chargeback').length,
+    })
+  }, [])
+
+  const buscarComEmails = useCallback((emails: string[]) => {
+    startTransition(async () => {
+      // Busca todas as vendas (sem paginação) para calcular KPIs corretos
+      const { data: todas } = await supabase
+        .from('vendas')
+        .select('*')
+        .in('email_contato', emails)
+        .order('data_pedido', { ascending: false })
+
+      const lista = (todas ?? []) as Venda[]
+      calcularKpisLocais(lista)
+      setTodasVendasEmails(lista)
+      setTotal(lista.length)
+      setVendas(lista.slice(0, PAGE_SIZE))
+      setPagina(0)
+    })
+  }, [supabase, calcularKpisLocais])
+
   const buscar = useCallback(async (params: {
     dataInicio: string; dataFim: string; produtoId: string
     status: string; pagamento: string; marketplace: string; pagina: number
+    emails?: string[]
   }) => {
     startTransition(async () => {
       const inicio = params.dataInicio + 'T00:00:00-03:00'
@@ -306,10 +359,15 @@ export default function VendasClient({
       let q = supabase
         .from('vendas')
         .select('*', { count: 'exact' })
-        .gte('data_pedido', inicio)
-        .lte('data_pedido', fim)
         .order('data_pedido', { ascending: false })
         .range(params.pagina * PAGE_SIZE, params.pagina * PAGE_SIZE + PAGE_SIZE - 1)
+
+      // Filtro por e-mails tem prioridade — ignora intervalo de datas
+      if (params.emails && params.emails.length > 0) {
+        q = q.in('email_contato', params.emails)
+      } else {
+        q = q.gte('data_pedido', inicio).lte('data_pedido', fim)
+      }
 
       if (params.produtoId)   q = q.eq('produto_id', params.produtoId)
       if (params.status)      q = q.eq('status', params.status)
@@ -320,46 +378,75 @@ export default function VendasClient({
       setVendas((data as Venda[]) ?? [])
       setTotal(count ?? 0)
 
-      const { data: kdata } = await supabase.rpc('get_kpis_vendas', {
-        p_inicio:      inicio,
-        p_fim:         fim,
-        p_produto_id:  params.produtoId  || null,
-        p_marketplace: params.marketplace || null,
-      })
+      if (!params.emails?.length) {
+        const { data: kdata } = await supabase.rpc('get_kpis_vendas', {
+          p_inicio:      inicio,
+          p_fim:         fim,
+          p_produto_id:  params.produtoId  || null,
+          p_marketplace: params.marketplace || null,
+        })
 
-      const k = kdata ?? {}
-      const bruto   = k.faturamentoBruto  ?? 0
-      const nVendas = k.totalVendas       ?? 0
+        const k = kdata ?? {}
+        const bruto   = k.faturamentoBruto  ?? 0
+        const nVendas = k.totalVendas       ?? 0
 
-      setKpis({
-        faturamentoBruto:   bruto,
-        faturamentoLiquido: k.faturamentoLiquido ?? 0,
-        totalVendas:        nVendas,
-        ticketMedio:        nVendas > 0 ? bruto / nVendas : 0,
-        reembolsos:         k.reembolsos  ?? 0,
-        chargebacks:        k.chargebacks ?? 0,
-      })
+        setKpis({
+          faturamentoBruto:   bruto,
+          faturamentoLiquido: k.faturamentoLiquido ?? 0,
+          totalVendas:        nVendas,
+          ticketMedio:        nVendas > 0 ? bruto / nVendas : 0,
+          reembolsos:         k.reembolsos  ?? 0,
+          chargebacks:        k.chargebacks ?? 0,
+        })
+      }
     })
   }, [supabase])
 
   function aplicarFiltros(novaPagina = 0) {
     setPagina(novaPagina)
-    buscar({ dataInicio, dataFim, produtoId, status, pagamento, marketplace, pagina: novaPagina })
+    buscar({ dataInicio, dataFim, produtoId, status, pagamento, marketplace, pagina: novaPagina, emails: emailsFiltro })
   }
 
   function limparFiltros() {
     setProdutoId(''); setStatus(''); setPagamento(''); setMarketplace('')
+    setEmailsFiltro([])
+    setTodasVendasEmails([])
     setPagina(0)
-    buscar({ dataInicio, dataFim, produtoId: '', status: '', pagamento: '', marketplace: '', pagina: 0 })
+    buscar({ dataInicio, dataFim, produtoId: '', status: '', pagamento: '', marketplace: '', pagina: 0, emails: [] })
   }
 
   function mudarPagina(nova: number) {
     setPagina(nova)
-    buscar({ dataInicio, dataFim, produtoId, status, pagamento, marketplace, pagina: nova })
+    if (emailsFiltro.length > 0) {
+      setVendas(todasVendasEmails.slice(nova * PAGE_SIZE, nova * PAGE_SIZE + PAGE_SIZE))
+    } else {
+      buscar({ dataInicio, dataFim, produtoId, status, pagamento, marketplace, pagina: nova, emails: [] })
+    }
   }
 
   return (
     <div className="p-6 space-y-5">
+
+      {/* Banner filtro CRM */}
+      {emailsFiltro.length > 0 && (
+        <div
+          className="flex items-center justify-between gap-4 px-4 py-3 rounded-xl text-sm"
+          style={{ backgroundColor: '#2A1E08', border: '1px solid #C9A84C44', color: '#C9A84C' }}
+        >
+          <span>
+            Mostrando vendas dos <strong>{emailsFiltro.length} compradores</strong> do CRM — sem filtro de data
+          </span>
+          <button
+            onClick={limparFiltros}
+            className="text-xs px-3 py-1 rounded-lg transition-colors shrink-0"
+            style={{ border: '1px solid #C9A84C66', color: '#C9A84C' }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#3A2E10'}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}
+          >
+            Limpar filtro
+          </button>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">

@@ -5,9 +5,6 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 )
 
-const AC_BASE = 'https://financialmove.api-us1.com/api/3'
-
-// ─── Mapa de custom fields do AC → coluna crm ────────────────────────────────
 const FIELD_MAP: Record<string, string> = {
   '14':  'utm_campaign',
   '16':  'utm_term',
@@ -33,19 +30,22 @@ const FIELD_MAP: Record<string, string> = {
   '266': 'data_evento',
 }
 
-// Campos inteiros
 const INT_FIELDS = new Set(['emails_enviados', 'emails_abertos', 'cliques_email', 'numeros_recadastro'])
-// Campos timestamptz
 const TS_FIELDS  = new Set([
   'data_cadastro', 'ultima_interacao', 'ultimo_envio_email',
   'data_abertura_email', 'ultimo_clique', 'data_evento',
 ])
 
-// ─── HTTP com rate limit (250ms entre chamadas, retry em 429) ────────────────
+// ─── Rate limit ───────────────────────────────────────────────────────────────
 
 let _lastCall = 0
 
+function delay(ms: number) {
+  return new Promise(r => setTimeout(r, ms))
+}
+
 async function acGet(
+  baseUrl: string,
   token: string,
   path: string,
   attempt = 0
@@ -55,7 +55,7 @@ async function acGet(
   if (wait > 0) await delay(wait)
   _lastCall = Date.now()
 
-  const resp = await fetch(`${AC_BASE}${path}`, {
+  const resp = await fetch(`${baseUrl}/api/3${path}`, {
     headers: { 'Api-Token': token },
   })
 
@@ -63,120 +63,77 @@ async function acGet(
     if (attempt >= 3) throw new Error(`Rate limit persistente em ${path}`)
     console.warn(`429 em ${path} — aguardando 60s (tentativa ${attempt + 1})`)
     await delay(60_000)
-    return acGet(token, path, attempt + 1)
+    return acGet(baseUrl, token, path, attempt + 1)
   }
 
-  if (!resp.ok) {
-    throw new Error(`AC ${resp.status} em ${path}`)
-  }
+  if (!resp.ok) throw new Error(`AC ${resp.status} em ${path}: ${await resp.text()}`)
 
   return resp.json() as Promise<Record<string, unknown>>
 }
 
-function delay(ms: number) {
-  return new Promise(r => setTimeout(r, ms))
-}
+// ─── Token ────────────────────────────────────────────────────────────────────
 
-// ─── Busca token do AC ────────────────────────────────────────────────────────
+interface TokenData { token: string; tokenId: string; baseUrl: string }
 
-async function getToken(): Promise<{ token: string; tokenId: string } | null> {
+async function getToken(): Promise<TokenData | null> {
   const { data, error } = await supabase
     .from('integration_tokens')
-    .select('id, vault_key')
+    .select('id, vault_key, config')
     .eq('integration', 'activecampaign')
     .eq('ativo', true)
     .maybeSingle()
 
   if (error || !data?.vault_key) {
-    console.error('Token activecampaign não encontrado:', error?.message)
+    console.error('Token não encontrado:', error?.message)
     return null
   }
-  return { token: data.vault_key as string, tokenId: data.id as string }
+
+  const baseUrl = (data.config as Record<string, string> | null)?.base_url
+  if (!baseUrl) { console.error('URL base não configurada'); return null }
+
+  return { token: data.vault_key as string, tokenId: data.id as string, baseUrl }
 }
 
-// ─── Busca tag no AC pelo nome exato ─────────────────────────────────────────
+// ─── Tag ─────────────────────────────────────────────────────────────────────
 
 async function buscarTag(
-  token: string,
-  nomeSemana: number
+  baseUrl: string, token: string, semana: number
 ): Promise<{ id: string; tag: string } | null> {
-  const nomeTag = `TL - VIP WEBN 07 [22 Q4] - INSCRITO - SEMANA ${nomeSemana}`
-  const json = await acGet(token, `/tags?search=${encodeURIComponent(nomeTag)}`)
-  const tags = (json.tags ?? []) as Array<{ id: string; tag: string }>
-  const found = tags.find(t => t.tag === nomeTag)
-  if (!found) {
-    console.warn(`Tag não encontrada para semana ${nomeSemana}: "${nomeTag}"`)
-    return null
-  }
-  return found
+  const nomeTag = `TL - VIP WEBN 07 [22 Q4] - INSCRITO - SEMANA ${semana}`
+  const json = await acGet(baseUrl, token, `/tags?search=${encodeURIComponent(nomeTag)}`)
+  const found = ((json.tags ?? []) as Array<{ id: string; tag: string }>).find(t => t.tag === nomeTag)
+  if (!found) console.warn(`Tag não encontrada: "${nomeTag}"`)
+  return found ?? null
 }
 
-// ─── Busca todos os contactTags de uma tag (paginado) ────────────────────────
-
-interface ContactTag {
-  contact: string
-  tag: string
-  cdate: string
-}
-
-async function buscarContactTags(
-  token: string,
-  tagId: string
-): Promise<ContactTag[]> {
-  const resultado: ContactTag[] = []
-  let offset = 0
-
-  while (true) {
-    const json = await acGet(
-      token,
-      `/contactTags?filters[tag]=${tagId}&limit=100&offset=${offset}`
-    )
-    const items = (json.contactTags ?? []) as ContactTag[]
-    if (items.length === 0) break
-    resultado.push(...items)
-    if (items.length < 100) break
-    offset += 100
-  }
-
-  return resultado
-}
-
-// ─── Busca dados completos de um contato ─────────────────────────────────────
+// ─── Interfaces ───────────────────────────────────────────────────────────────
 
 interface AcContact {
-  id: string
-  email: string
-  firstName: string
-  lastName: string
-  phone: string
-  cdate: string
+  id: string; email: string; firstName: string; lastName: string; phone: string; cdate: string
 }
+interface AcFieldValue { contact: string; field: string; value: string }
 
-interface AcFieldValue {
-  field: string
-  value: string
-}
+// ─── Busca uma página de contatos (1 chamada HTTP) ────────────────────────────
 
-async function buscarContato(
-  token: string,
-  contactId: string
-): Promise<{ contact: AcContact; fieldValues: AcFieldValue[] }> {
-  const json = await acGet(token, `/contacts/${contactId}?include=fieldValues`)
+async function buscarPagina(
+  baseUrl: string, token: string, tagId: string, offset: number
+): Promise<{ contacts: AcContact[]; fieldValues: AcFieldValue[]; total: number }> {
+  const json = await acGet(baseUrl, token, `/contacts?tagid=${tagId}&include=fieldValues&limit=100&offset=${offset}`)
   return {
-    contact:     json.contact as AcContact,
+    contacts:    (json.contacts    ?? []) as AcContact[],
     fieldValues: (json.fieldValues ?? []) as AcFieldValue[],
+    total:       (json.meta as Record<string, number>)?.total ?? 0,
   }
 }
 
-// ─── Mapeia fieldValues para colunas crm ─────────────────────────────────────
+// ─── Mapeamento de campos ─────────────────────────────────────────────────────
 
-function mapearFields(fieldValues: AcFieldValue[]): Record<string, unknown> {
+function mapearFields(contactId: string, fieldValues: AcFieldValue[]): Record<string, unknown> {
   const result: Record<string, unknown> = {}
-
   for (const fv of fieldValues) {
+    if (fv.contact !== contactId) continue
     const col = FIELD_MAP[fv.field]
     if (!col || !fv.value) continue
-
     if (INT_FIELDS.has(col)) {
       const n = parseInt(fv.value, 10)
       if (!isNaN(n)) result[col] = n
@@ -187,220 +144,203 @@ function mapearFields(fieldValues: AcFieldValue[]): Record<string, unknown> {
       result[col] = fv.value
     }
   }
-
   return result
 }
 
-// ─── Upsert contato + crm + webinario_inscritos ───────────────────────────────
+// ─── Processa um lote (100 contatos) ─────────────────────────────────────────
 
-async function processarContato(
-  acContact: AcContact,
-  fieldValues: AcFieldValue[],
-  cdate: string,
-  semana: number,
-  tagNome: string,
-  tagId: string,
-): Promise<'inserted' | 'skipped' | 'error'> {
+async function processarLote(
+  contacts: AcContact[], fieldValues: AcFieldValue[],
+  semana: number, tagNome: string, tagId: string
+): Promise<{ inserted: number; errors: number }> {
+  let inserted = 0, errors = 0
+
+  for (const ac of contacts) {
+    try {
+      const email = ac.email?.toLowerCase().trim()
+      if (!email) { errors++; continue }
+
+      const nome  = [ac.firstName, ac.lastName].filter(Boolean).join(' ') || null
+      const campos = mapearFields(String(ac.id), fieldValues)
+
+      const { data: contatoId, error: e1 } = await supabase.rpc('upsert_contato', {
+        p_email: email, p_nome: nome,
+        p_telefone: ac.phone || null, p_ac_contact_id: String(ac.id),
+      })
+      if (e1) throw new Error(`upsert_contato: ${e1.message}`)
+
+      const { data: crmData, error: e2 } = await supabase
+        .from('crm')
+        .upsert({
+          contato_id: contatoId as string, ac_contact_id: String(ac.id),
+          email, nome, telefone: ac.phone || null,
+          ...campos, updated_at: new Date().toISOString(),
+        }, { onConflict: 'ac_contact_id' })
+        .select('id').single()
+      if (e2) throw new Error(`crm: ${e2.message}`)
+
+      // Upsert via RPC: insere com UTMs na primeira vez, atualiza UTMs apenas se ainda NULL
+      // Garante que UTMs de tráfego (captação) nunca são sobrescritas por UTMs de venda
+      const { error: e3 } = await supabase.rpc('upsert_inscrito_webn', {
+        p_contato_id:    contatoId as string,
+        p_crm_id:        crmData?.id as string,
+        p_numero_semana: semana,
+        p_tag_ac:        tagNome,
+        p_ac_tag_id:     tagId,
+        p_data_inscricao: ac.cdate ? new Date(ac.cdate).toISOString() : null,
+        p_utm_source:    (campos.utm_source   as string) || null,
+        p_utm_campaign:  (campos.utm_campaign as string) || null,
+        p_utm_medium:    (campos.utm_medium   as string) || null,
+        p_utm_content:   (campos.utm_content  as string) || null,
+        p_utm_term:      (campos.utm_term     as string) || null,
+        p_utm_id:        (campos.utm_id       as string) || null,
+      })
+      if (e3) throw new Error(`inscritos: ${e3.message}`)
+
+      inserted++
+    } catch (e) {
+      console.error(`Contato ${ac.id}:`, e instanceof Error ? e.message : e)
+      errors++
+    }
+  }
+
+  return { inserted, errors }
+}
+
+// ─── Processamento completo de uma semana (sem limite de tempo) ───────────────
+
+async function processarSemana(
+  baseUrl: string, token: string, tokenId: string,
+  semana: number, jobRunId: string
+): Promise<void> {
+  let totalFetched = 0, totalInserted = 0, totalErrors = 0
+
   try {
-    const email = acContact.email?.toLowerCase().trim()
-    if (!email) return 'error'
+    await supabase.rpc('ensure_semana_existe', { p_numero: semana })
 
-    const nome = [acContact.firstName, acContact.lastName].filter(Boolean).join(' ') || null
-    const campos = mapearFields(fieldValues)
-
-    // 3d — upsert contato
-    const { data: contatoData, error: contatoErr } = await supabase.rpc('upsert_contato', {
-      p_email:         email,
-      p_nome:          nome,
-      p_telefone:      acContact.phone || null,
-      p_ac_contact_id: String(acContact.id),
-    })
-    if (contatoErr) throw new Error(`upsert_contato: ${contatoErr.message}`)
-    const contatoId = contatoData as string
-
-    // 3e — upsert crm
-    const crmPayload: Record<string, unknown> = {
-      contato_id:    contatoId,
-      ac_contact_id: String(acContact.id),
-      email,
-      nome,
-      telefone:      acContact.phone || null,
-      ...campos,
-      updated_at:    new Date().toISOString(),
+    const tagInfo = await buscarTag(baseUrl, token, semana)
+    if (!tagInfo) {
+      await supabase.from('integration_job_runs').update({
+        status: 'error', finished_at: new Date().toISOString(),
+        error_message: `Tag não encontrada para semana ${semana}`,
+      }).eq('id', jobRunId)
+      return
     }
 
-    const { data: crmData, error: crmErr } = await supabase
-      .from('crm')
-      .upsert(crmPayload, { onConflict: 'ac_contact_id' })
-      .select('id')
-      .single()
+    console.log(`Semana ${semana}: tag "${tagInfo.tag}" (id=${tagInfo.id})`)
 
-    if (crmErr) throw new Error(`crm upsert: ${crmErr.message}`)
-    const crmId = crmData?.id as string
+    // Primeira página — descobre o total
+    const primeira = await buscarPagina(baseUrl, token, tagInfo.id, 0)
+    const total = primeira.total
+    console.log(`Semana ${semana}: ${total} contatos`)
 
-    // 3f — insert webinario_inscritos (DO NOTHING em conflito unique)
-    const { error: inscErr } = await supabase
-      .from('webinario_inscritos')
-      .upsert({
-        contato_id:    contatoId,
-        crm_id:        crmId,
-        numero_semana: semana,
-        tag_ac:        tagNome,
-        ac_tag_id:     tagId,
-        data_inscricao: cdate ? new Date(cdate).toISOString() : null,
-      }, { onConflict: 'contato_id,numero_semana', ignoreDuplicates: true })
-
-    if (inscErr) {
-      throw new Error(`webinario_inscritos upsert: ${inscErr.message}`)
+    if (primeira.contacts.length > 0) {
+      totalFetched += primeira.contacts.length
+      const r = await processarLote(primeira.contacts, primeira.fieldValues, semana, tagInfo.tag, tagInfo.id)
+      totalInserted += r.inserted
+      totalErrors   += r.errors
     }
 
-    return 'inserted'
-  } catch (e) {
-    console.error(`Erro no contato ${acContact.id}:`, e instanceof Error ? e.message : e)
-    return 'error'
+    // Páginas restantes
+    let offset = 100
+    while (offset < total) {
+      const pagina = await buscarPagina(baseUrl, token, tagInfo.id, offset)
+      if (pagina.contacts.length === 0) break
+
+      totalFetched += pagina.contacts.length
+      const r = await processarLote(pagina.contacts, pagina.fieldValues, semana, tagInfo.tag, tagInfo.id)
+      totalInserted += r.inserted
+      totalErrors   += r.errors
+
+      console.log(`Semana ${semana}: ${Math.min(offset + 100, total)}/${total} processados`)
+      offset += 100
+    }
+
+    const finalStatus = totalErrors > 0 && totalFetched === 0 ? 'error'
+      : totalErrors > 0 ? 'partial' : 'success'
+
+    await supabase.from('integration_job_runs').update({
+      status: finalStatus, finished_at: new Date().toISOString(),
+      records_fetched: totalFetched, records_inserted: totalInserted, records_error: totalErrors,
+    }).eq('id', jobRunId)
+
+    await supabase.from('integration_tokens').update({
+      last_sync_at: new Date().toISOString(),
+      last_sync_status: finalStatus === 'error' ? 'error' : 'success',
+    }).eq('id', tokenId)
+
+    console.log(`Semana ${semana}: concluído — ${totalInserted} inseridos, ${totalErrors} erros`)
+
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('Erro fatal:', msg)
+
+    await supabase.from('integration_job_runs').update({
+      status: 'error', finished_at: new Date().toISOString(), error_message: msg,
+      records_fetched: totalFetched, records_inserted: totalInserted, records_error: totalErrors + 1,
+    }).eq('id', jobRunId)
+
+    await supabase.from('integration_tokens').update({
+      last_sync_at: new Date().toISOString(), last_sync_status: 'error',
+    }).eq('id', tokenId)
   }
 }
 
 // ─── Handler principal ────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
-  let body: { semanas?: number[]; force?: boolean } = {}
+  let body: { semanas?: number[] } = {}
   try { body = await req.json() } catch { /* body opcional */ }
 
-  // Busca token
   const tokenData = await getToken()
   if (!tokenData) {
     return new Response(
-      JSON.stringify({ error: 'Token activecampaign não encontrado' }),
+      JSON.stringify({ error: 'Token ou URL base não configurados' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
   }
-  const { token, tokenId } = tokenData
+  const { token, tokenId, baseUrl } = tokenData
 
-  // Cria job run
-  const { data: jobRun } = await supabase
-    .from('integration_job_runs')
-    .insert({
-      integration: 'activecampaign_webn',
-      status:      'running',
-      started_at:  new Date().toISOString(),
-    })
-    .select('id')
-    .single()
-  const jobRunId = jobRun?.id as string | undefined
-
-  let totalFetched  = 0
-  let totalInserted = 0
-  let totalErrors   = 0
-
-  try {
-    // Determinar semanas
-    let semanas: number[]
-    if (body.semanas?.length) {
-      semanas = body.semanas
-    } else {
-      const { data: semanaAtual } = await supabase.rpc('get_semana_atual')
-      const atual = semanaAtual as number
-      semanas = [atual, atual - 1, atual - 2, atual - 3, atual - 4]
-    }
-
-    console.log(`Processando semanas: ${semanas.join(', ')}`)
-
-    for (const semana of semanas) {
-      try {
-        // Garantir que a semana existe
-        await supabase.rpc('ensure_semana_existe', { p_numero: semana })
-
-        // 3a — buscar tag
-        const tagInfo = await buscarTag(token, semana)
-        if (!tagInfo) continue
-
-        console.log(`Semana ${semana}: tag "${tagInfo.tag}" (id=${tagInfo.id})`)
-
-        // 3b — buscar contactTags
-        const contactTags = await buscarContactTags(token, tagInfo.id)
-        console.log(`Semana ${semana}: ${contactTags.length} contatos encontrados`)
-        totalFetched += contactTags.length
-
-        // 3c..3f — processar cada contato
-        for (const ct of contactTags) {
-          try {
-            const { contact, fieldValues } = await buscarContato(token, ct.contact)
-            const result = await processarContato(
-              contact,
-              fieldValues,
-              ct.cdate,
-              semana,
-              tagInfo.tag,
-              tagInfo.id,
-            )
-            if (result === 'inserted') totalInserted++
-            if (result === 'error')    totalErrors++
-          } catch (e) {
-            console.error(`Erro ao processar contact ${ct.contact}:`, e instanceof Error ? e.message : e)
-            totalErrors++
-          }
-        }
-
-      } catch (e) {
-        console.error(`Erro na semana ${semana}:`, e instanceof Error ? e.message : e)
-        totalErrors++
-      }
-    }
-
-    const finalStatus = totalErrors > 0 && totalFetched === 0
-      ? 'error'
-      : totalErrors > 0
-        ? 'partial'
-        : 'success'
-
-    // Atualiza job run
-    if (jobRunId) {
-      await supabase.from('integration_job_runs').update({
-        status:           finalStatus,
-        finished_at:      new Date().toISOString(),
-        records_fetched:  totalFetched,
-        records_inserted: totalInserted,
-        records_error:    totalErrors,
-      }).eq('id', jobRunId)
-    }
-
-    // Atualiza token
-    await supabase.from('integration_tokens').update({
-      last_sync_at:     new Date().toISOString(),
-      last_sync_status: finalStatus === 'error' ? 'error' : 'success',
-    }).eq('id', tokenId)
-
-    return new Response(JSON.stringify({
-      status:           finalStatus,
-      records_fetched:  totalFetched,
-      records_inserted: totalInserted,
-      records_error:    totalErrors,
-    }), { headers: { 'Content-Type': 'application/json' } })
-
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error('Erro fatal:', msg)
-
-    if (jobRunId) {
-      await supabase.from('integration_job_runs').update({
-        status:        'error',
-        finished_at:   new Date().toISOString(),
-        error_message: msg,
-        records_fetched:  totalFetched,
-        records_inserted: totalInserted,
-        records_error:    totalErrors + 1,
-      }).eq('id', jobRunId)
-    }
-
-    await supabase.from('integration_tokens').update({
-      last_sync_at:     new Date().toISOString(),
-      last_sync_status: 'error',
-    }).eq('id', tokenId)
-
-    return new Response(
-      JSON.stringify({ error: msg }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    )
+  // Determina semanas a processar
+  let semanas: number[]
+  if (body.semanas?.length) {
+    semanas = body.semanas
+  } else {
+    const { data: semanaAtual } = await supabase.rpc('get_semana_atual')
+    semanas = [semanaAtual as number]
   }
+
+  // Cria um job run por semana
+  const jobRuns: Array<{ semana: number; jobRunId: string }> = []
+  for (const semana of semanas) {
+    const { data: jobRun } = await supabase
+      .from('integration_job_runs')
+      .insert({ integration: 'activecampaign_webn', status: 'running', started_at: new Date().toISOString() })
+      .select('id').single()
+    if (jobRun?.id) jobRuns.push({ semana, jobRunId: jobRun.id as string })
+  }
+
+  // Processa em background — responde imediatamente, sem timeout
+  const trabalho = async () => {
+    for (const { semana, jobRunId } of jobRuns) {
+      await processarSemana(baseUrl, token, tokenId, semana, jobRunId)
+    }
+  }
+
+  // @ts-ignore — EdgeRuntime disponível no Supabase Edge
+  if (typeof EdgeRuntime !== 'undefined') {
+    EdgeRuntime.waitUntil(trabalho())
+  } else {
+    trabalho() // fallback local
+  }
+
+  return new Response(
+    JSON.stringify({
+      status: 'started',
+      semanas,
+      jobs: jobRuns.map(j => j.jobRunId),
+      message: `Processando ${semanas.length} semana(s) em background. Acompanhe pelo log de integrações.`,
+    }),
+    { headers: { 'Content-Type': 'application/json' } }
+  )
 })

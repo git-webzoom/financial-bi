@@ -109,6 +109,42 @@ async function* fetchInsights(
   }
 }
 
+// Busca reach deduplcado no nível de conta (igual à BM)
+async function fetchReachConta(
+  accountId: string,
+  token: string,
+  dateStart: string,
+  dateEnd: string
+): Promise<Array<{ date_ref: string; reach: number }>> {
+  const timeRange = JSON.stringify({ since: dateStart, until: dateEnd })
+  const url = `${META_API}/act_${accountId}/insights?` + new URLSearchParams({
+    level: 'account',
+    time_increment: '1',
+    limit: '100',
+    access_token: token,
+    time_range: timeRange,
+    fields: 'date_start,reach',
+  }).toString()
+
+  const resp = await fetch(url)
+  await checkRateLimit(resp)
+
+  const json = await resp.json() as {
+    data?: Array<{ date_start: string; reach?: string }>
+    error?: { message: string }
+  }
+
+  if (!resp.ok || json.error) {
+    console.error(`Meta API reach conta ${accountId}: ${json.error?.message ?? resp.status}`)
+    return []
+  }
+
+  return (json.data ?? []).map(r => ({
+    date_ref: r.date_start,
+    reach: parseInt(r.reach ?? '0', 10) || 0,
+  }))
+}
+
 async function processAccount(
   account: { id: string; account_id: string; nome: string },
   token: string,
@@ -177,6 +213,19 @@ async function processAccount(
       }
 
       inserted++
+    }
+
+    // Busca reach deduplcado no nível de conta e salva em trafego_reach
+    try {
+      const reachDias = await fetchReachConta(account.account_id, token, dateStart, dateEnd)
+      for (const { date_ref, reach } of reachDias) {
+        await supabase.from('trafego_reach').upsert(
+          { ad_account_id: account.account_id, date_ref, reach },
+          { onConflict: 'ad_account_id,date_ref' }
+        )
+      }
+    } catch (e) {
+      console.warn(`Reach conta ${account.account_id}:`, e instanceof Error ? e.message : e)
     }
 
     const syncStatus = errors > 0 && fetched === 0 ? 'error' : 'success'
