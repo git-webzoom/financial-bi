@@ -12,7 +12,7 @@ export default async function CrmPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: semanaAtual } = await supabase.rpc('get_semana_webnario_ativa')
+  const { data: semanaAtual } = await supabase.rpc('get_semana_atual')
   const semanaDefault = semanaAtual as number ?? 172
 
   const semana = searchParams.semana ? parseInt(searchParams.semana, 10) : semanaDefault
