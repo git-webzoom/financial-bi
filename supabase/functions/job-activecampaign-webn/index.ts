@@ -306,7 +306,7 @@ Deno.serve(async (req: Request) => {
   if (body.semanas?.length) {
     semanas = body.semanas
   } else {
-    const { data: semanaAtual } = await supabase.rpc('get_semana_atual')
+    const { data: semanaAtual } = await supabase.rpc('get_semana_webnario_ativa')
     semanas = [semanaAtual as number]
   }
 

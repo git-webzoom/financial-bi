@@ -12,22 +12,17 @@ export default async function CrmPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Semana atual via RPC
-  const { data: semanaAtual } = await supabase.rpc('get_semana_atual')
+  const { data: semanaAtual } = await supabase.rpc('get_semana_webnario_ativa')
   const semanaDefault = semanaAtual as number ?? 172
 
   const semana = searchParams.semana ? parseInt(searchParams.semana, 10) : semanaDefault
   const semanaValida = isNaN(semana) ? semanaDefault : semana
 
-  // Garante que a semana existe no banco
   await supabase.rpc('ensure_semana_existe', { p_numero: semanaValida })
 
-  // Período da semana selecionada (RPC retorna array, pegar primeiro)
   const { data: periodoRaw } = await supabase.rpc('get_periodo_semana', { p_numero: semanaValida })
   const periodo = Array.isArray(periodoRaw) ? periodoRaw[0] ?? null : periodoRaw ?? null
 
-  // Inscritos da semana — UTMs vêm do webinario_inscritos (congeladas na captação)
-  // Dados de engajamento/temperatura vêm do crm (sempre atualizados)
   const { data: inscritos } = await supabase
     .from('webinario_inscritos')
     .select(`
@@ -66,12 +61,10 @@ export default async function CrmPage({
     .eq('numero_semana', semanaValida)
     .order('data_inscricao', { ascending: false })
 
-  // Emails dos inscritos para cruzar com vendas
   const emails = (inscritos ?? [])
     .map((i) => (i.crm as { email?: string })?.email)
     .filter(Boolean) as string[]
 
-  // Compradores — emails que têm venda aprovada
   const { data: comprasRaw } = emails.length > 0
     ? await supabase
         .from('vendas')
@@ -86,7 +79,6 @@ export default async function CrmPage({
     totalPorEmail[v.email_contato] = (totalPorEmail[v.email_contato] ?? 0) + (v.valor_liquido ?? 0)
   }
 
-  // Outras semanas por contato
   const contatoIds = (inscritos ?? [])
     .map((i) => (i.contatos as { id?: string })?.id)
     .filter(Boolean) as string[]
@@ -106,7 +98,6 @@ export default async function CrmPage({
     outrasSemanasPorContato[os.contato_id].push(os.numero_semana)
   }
 
-  // Monta lista final de inscritos enriquecida
   const inscritosEnriquecidos = (inscritos ?? []).map((i) => {
     const crm = (i.crm as unknown as Record<string, unknown>) ?? {}
     const contato = (i.contatos as unknown as { id?: string }) ?? {}
@@ -121,14 +112,12 @@ export default async function CrmPage({
       email,
       nome:           crm.nome as string ?? null,
       telefone:       crm.telefone as string ?? null,
-      // UTMs de captação — congeladas no webinario_inscritos
       utm_source:     i.utm_source as string ?? null,
       utm_campaign:   i.utm_campaign as string ?? null,
       utm_medium:     i.utm_medium as string ?? null,
       utm_content:    i.utm_content as string ?? null,
       utm_term:       i.utm_term as string ?? null,
       utm_id:         i.utm_id as string ?? null,
-      // Dados de engajamento — sempre atualizados do crm
       temperatura:    crm.temperatura as string ?? null,
       estado:         crm.estado as string ?? null,
       cidade:         crm.cidade as string ?? null,

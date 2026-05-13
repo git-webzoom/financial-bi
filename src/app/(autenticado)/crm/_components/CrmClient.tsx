@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import SeletorSemana from './SeletorSemana'
@@ -57,19 +57,77 @@ interface Props {
   semanaAtual: number
   semanaInicial: number
   periodoInicial: { data_inicio: string; data_fim: string; data_evento: string } | null
-  inscritosIniciais: InscritoCrm[]
 }
 
-export default function CrmClient({ semanaAtual, semanaInicial, periodoInicial, inscritosIniciais }: Props) {
+async function buscarDadosSemana(
+  supabase: ReturnType<typeof createClient>,
+  numeroSemana: number
+): Promise<{ periodo: { data_inicio: string; data_fim: string; data_evento: string } | null; inscritos: InscritoCrm[] }> {
+  await supabase.rpc('ensure_semana_existe', { p_numero: numeroSemana })
+
+  const [{ data: periodoRaw }, { data: inscritosJson }, { data: comprasRaw }] = await Promise.all([
+    supabase.rpc('get_periodo_semana', { p_numero: numeroSemana }),
+    supabase.rpc('get_inscritos_semana', { p_numero: numeroSemana }),
+    supabase.rpc('get_compradores_semana', { p_numero: numeroSemana }),
+  ])
+
+  const periodo = Array.isArray(periodoRaw) ? periodoRaw[0] ?? null : periodoRaw ?? null
+  const lista = (inscritosJson as unknown as Record<string, unknown>[]) ?? []
+
+  const contatoIds = lista.map((i) => i.contato_id).filter(Boolean) as string[]
+
+  const { data: outrasJson } = contatoIds.length > 0
+    ? await supabase.rpc('get_outras_semanas_contatos', { p_contato_ids: contatoIds, p_numero: numeroSemana })
+    : { data: [] }
+  const outrasRaw = (outrasJson as unknown as { contato_id: string; numero_semana: number }[]) ?? []
+
+  const compradoresSet = new Set((comprasRaw ?? []).map((v: { contato_id: string }) => v.contato_id))
+  const totalPorContato: Record<string, number> = {}
+  for (const v of comprasRaw ?? []) {
+    totalPorContato[(v as { contato_id: string; valor_total: number }).contato_id] = (v as { contato_id: string; valor_total: number }).valor_total ?? 0
+  }
+
+  const outrasPorContato: Record<string, number[]> = {}
+  for (const os of outrasRaw) {
+    if (!outrasPorContato[os.contato_id]) outrasPorContato[os.contato_id] = []
+    outrasPorContato[os.contato_id].push(os.numero_semana)
+  }
+
+  const inscritos: InscritoCrm[] = lista.map((i) => {
+    const contatoId = i.contato_id ?? ''
+    return {
+      id: i.id as string, contato_id: contatoId, crm_id: i.crm_id as string ?? '',
+      numero_semana: i.numero_semana as number, data_inscricao: i.data_inscricao as string ?? null,
+      email: i.crm_email ?? '', nome: i.crm_nome ?? null, telefone: i.crm_telefone ?? null,
+      utm_source: i.utm_source ?? null, utm_campaign: i.utm_campaign ?? null,
+      utm_medium: i.utm_medium ?? null, utm_content: i.utm_content ?? null,
+      utm_term: i.utm_term ?? null, utm_id: i.utm_id ?? null,
+      temperatura: i.crm_temperatura ?? null, estado: i.crm_estado ?? null,
+      cidade: i.crm_cidade ?? null, data_cadastro: i.crm_data_cadastro ?? null,
+      emails_enviados: i.crm_emails_enviados ?? null, emails_abertos: i.crm_emails_abertos ?? null,
+      cliques_email: i.crm_cliques_email ?? null, ultima_interacao: i.crm_ultima_interacao ?? null,
+      data_abertura_email: i.crm_data_abertura_email ?? null, ultimo_clique: i.crm_ultimo_clique ?? null,
+      ultimo_envio_email: i.crm_ultimo_envio_email ?? null, limite_engajamento: i.crm_limite_engajamento ?? null,
+      numeros_recadastro: i.crm_numeros_recadastro ?? null,
+      comprou: compradoresSet.has(contatoId), valor_compras_total: totalPorContato[contatoId] ?? 0,
+      outras_semanas: outrasPorContato[contatoId] ?? [],
+    }
+  })
+
+  return { periodo, inscritos }
+}
+
+export default function CrmClient({ semanaAtual, semanaInicial, periodoInicial }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
 
   const [semana, setSemana] = useState(semanaInicial)
   const [periodo, setPeriodo] = useState(periodoInicial)
-  const [inscritos, setInscritos] = useState<InscritoCrm[]>(inscritosIniciais)
-  const [carregando, setCarregando] = useState(false)
+  const [inscritos, setInscritos] = useState<InscritoCrm[]>([])
+  const [carregando, setCarregando] = useState(true)
   const [inscritoSelecionado, setInscritoSelecionado] = useState<InscritoCrm | null>(null)
+  const semanaCarregada = useRef<number | null>(null)
 
   const [filtros, setFiltros] = useState<FiltrosCrm>({
     busca: '',
@@ -81,84 +139,29 @@ export default function CrmClient({ semanaAtual, semanaInicial, periodoInicial, 
     campaignGrafico: null,
   })
 
+  // Carrega dados sempre no cliente, na montagem e ao trocar de semana
+  useEffect(() => {
+    if (semanaCarregada.current === semanaInicial) return
+    semanaCarregada.current = semanaInicial
+    setCarregando(true)
+    buscarDadosSemana(supabase, semanaInicial).then(({ periodo: p, inscritos: i }) => {
+      setPeriodo(p)
+      setInscritos(i)
+      setSemana(semanaInicial)
+      setCarregando(false)
+    })
+  // supabase é estável entre renders
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [semanaInicial])
+
   const carregarSemana = useCallback(async (novaS: number) => {
     setCarregando(true)
     setFiltros(f => ({ ...f, sourceGrafico: null, campaignGrafico: null }))
+    semanaCarregada.current = novaS
 
-    await supabase.rpc('ensure_semana_existe', { p_numero: novaS })
-    const { data: periodoRaw } = await supabase.rpc('get_periodo_semana', { p_numero: novaS })
-    const novoPeriodo = Array.isArray(periodoRaw) ? periodoRaw[0] ?? null : periodoRaw ?? null
-    setPeriodo(novoPeriodo)
-
-    const { data: novosInscritos } = await supabase
-      .from('webinario_inscritos')
-      .select(`
-        id, numero_semana, data_inscricao,
-        utm_source, utm_campaign, utm_medium, utm_content, utm_term, utm_id,
-        crm:crm_id (
-          id, email, nome, telefone,
-          temperatura, estado, cidade, data_cadastro,
-          emails_enviados, emails_abertos, cliques_email,
-          ultima_interacao, data_abertura_email, ultimo_clique,
-          ultimo_envio_email, limite_engajamento, numeros_recadastro
-        ),
-        contatos:contato_id ( id )
-      `)
-      .eq('numero_semana', novaS)
-      .order('data_inscricao', { ascending: false })
-
-    const lista = novosInscritos ?? []
-    const emails = lista.map((i) => ((i.crm as unknown as Record<string,unknown>))?.email as string).filter(Boolean)
-    const contatoIds = lista.map((i) => ((i.contatos as unknown as Record<string,unknown>))?.id as string).filter(Boolean)
-
-    const [comprasRes, outrasRes] = await Promise.all([
-      emails.length > 0
-        ? supabase.from('vendas').select('email_contato, valor_liquido').in('email_contato', emails).in('status', ['approved','complete','completed','paid','active','confirmed'])
-        : { data: [] },
-      contatoIds.length > 0
-        ? supabase.from('webinario_inscritos').select('contato_id, numero_semana').in('contato_id', contatoIds).neq('numero_semana', novaS)
-        : { data: [] },
-    ])
-
-    const compradoresSet = new Set((comprasRes.data ?? []).map((v) => v.email_contato))
-    const totalPorEmail: Record<string, number> = {}
-    for (const v of comprasRes.data ?? []) {
-      totalPorEmail[v.email_contato] = (totalPorEmail[v.email_contato] ?? 0) + (v.valor_liquido ?? 0)
-    }
-
-    const outrasPorContato: Record<string, number[]> = {}
-    for (const os of outrasRes.data ?? []) {
-      if (!outrasPorContato[os.contato_id]) outrasPorContato[os.contato_id] = []
-      outrasPorContato[os.contato_id].push(os.numero_semana)
-    }
-
-    const enriquecidos: InscritoCrm[] = lista.map((i) => {
-      const crm = (i.crm as unknown as Record<string, unknown>) ?? {}
-      const contato = (i.contatos as unknown as { id?: string }) ?? {}
-      const email = crm.email as string ?? ''
-      const contatoId = contato.id ?? ''
-      return {
-        id: i.id as string, contato_id: contatoId, crm_id: crm.id as string ?? '',
-        numero_semana: i.numero_semana as number, data_inscricao: i.data_inscricao as string ?? null,
-        email, nome: crm.nome as string ?? null, telefone: crm.telefone as string ?? null,
-        // UTMs de captação — congeladas no webinario_inscritos
-        utm_source: i.utm_source as string ?? null, utm_campaign: i.utm_campaign as string ?? null,
-        utm_medium: i.utm_medium as string ?? null, utm_content: i.utm_content as string ?? null,
-        utm_term: i.utm_term as string ?? null, utm_id: i.utm_id as string ?? null,
-        // Engajamento — sempre atualizado do crm
-        temperatura: crm.temperatura as string ?? null, estado: crm.estado as string ?? null,
-        cidade: crm.cidade as string ?? null, data_cadastro: crm.data_cadastro as string ?? null,
-        emails_enviados: crm.emails_enviados as number ?? null, emails_abertos: crm.emails_abertos as number ?? null,
-        cliques_email: crm.cliques_email as number ?? null, ultima_interacao: crm.ultima_interacao as string ?? null,
-        data_abertura_email: crm.data_abertura_email as string ?? null, ultimo_clique: crm.ultimo_clique as string ?? null,
-        ultimo_envio_email: crm.ultimo_envio_email as string ?? null, limite_engajamento: crm.limite_engajamento as string ?? null,
-        numeros_recadastro: crm.numeros_recadastro as number ?? null,
-        comprou: compradoresSet.has(email), valor_compras_total: totalPorEmail[email] ?? 0,
-        outras_semanas: outrasPorContato[contatoId] ?? [],
-      }
-    })
-
-    setInscritos(enriquecidos)
+    const { periodo: p, inscritos: i } = await buscarDadosSemana(supabase, novaS)
+    setPeriodo(p)
+    setInscritos(i)
     setSemana(novaS)
     setCarregando(false)
 
@@ -167,7 +170,6 @@ export default function CrmClient({ semanaAtual, semanaInicial, periodoInicial, 
     router.push(`?${params.toString()}`, { scroll: false })
   }, [supabase, router, searchParams])
 
-  // Filtros aplicados
   const inscritosFiltrados = useMemo(() => {
     return inscritos.filter((i) => {
       if (filtros.busca) {
@@ -189,7 +191,6 @@ export default function CrmClient({ semanaAtual, semanaInicial, periodoInicial, 
   return (
     <div className="p-6 space-y-5" style={{ backgroundColor: '#0A0A0A', minHeight: '100vh' }}>
 
-      {/* Seletor de Semana */}
       <SeletorSemana
         semana={semana}
         semanaAtual={semanaAtual}
@@ -198,10 +199,8 @@ export default function CrmClient({ semanaAtual, semanaInicial, periodoInicial, 
         onMudar={carregarSemana}
       />
 
-      {/* KPIs */}
       <CrmKpis inscritos={inscritos} carregando={carregando} />
 
-      {/* Gráficos */}
       <CrmGraficosOrigem
         inscritos={inscritos}
         carregando={carregando}
@@ -211,7 +210,6 @@ export default function CrmClient({ semanaAtual, semanaInicial, periodoInicial, 
         onCampaign={(c) => setFiltros(f => ({ ...f, campaignGrafico: f.campaignGrafico === c ? null : c }))}
       />
 
-      {/* Filtros + Tabela */}
       <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
         <div className="px-5 py-4 flex items-center justify-between gap-4" style={{ borderBottom: '1px solid #1E1E1E' }}>
           <div>
@@ -267,7 +265,6 @@ export default function CrmClient({ semanaAtual, semanaInicial, periodoInicial, 
         />
       </div>
 
-      {/* Painel lateral */}
       {inscritoSelecionado && (
         <CrmPainelDetalhe
           inscrito={inscritoSelecionado}

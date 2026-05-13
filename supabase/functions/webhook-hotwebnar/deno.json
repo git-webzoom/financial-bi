@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "net": [
+      "esm.sh",
+      "zbfcrnsfygovzmncmmjz.supabase.co"
+    ],
+    "env": [
+      "SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "HOTWEBNAR_WEBHOOK_SECRET"
+    ]
+  }
+}
