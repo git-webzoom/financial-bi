@@ -77,7 +77,7 @@ const WEBHOOK_TABELAS = [
   { tabela: 'raw_grupos_wpp', label: 'Grupos WhatsApp' },
 ]
 
-type Aba = 'integracoes' | 'meta_ads' | 'activecampaign' | 'usuarios'
+type Aba = 'integracoes' | 'meta_ads' | 'activecampaign' | 'sendflow' | 'usuarios'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -515,9 +515,10 @@ function AbaMetaAds({
   const [addingAccount, setAddingAccount] = useState(false)
   const [accountMsg, setAccountMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
 
-  const [syncing, setSyncing]       = useState<string | null>(null)
-  const [syncingAll, setSyncingAll] = useState(false)
-  const [syncAllMsg, setSyncAllMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [syncing, setSyncing]           = useState<string | null>(null)
+  const [syncingAll, setSyncingAll]     = useState(false)
+  const [syncingWeekly, setSyncingWeekly] = useState(false)
+  const [syncAllMsg, setSyncAllMsg]     = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
 
   const dias = diasParaVencer(metaToken?.expires_at ?? null)
 
@@ -602,6 +603,37 @@ function AbaMetaAds({
       onRefresh()
     } finally {
       setSyncing(null)
+    }
+  }
+
+  async function sincronizarSemanal() {
+    setSyncingWeekly(true)
+    setSyncAllMsg(null)
+    try {
+      const res = await fetch('/api/meta-ads/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'weekly' }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Erro desconhecido')
+
+      const { data } = await supabase
+        .from('meta_ad_accounts')
+        .select('id, account_id, nome, ativo, last_sync_at, last_sync_status')
+        .order('nome')
+      if (data) setAccounts(data)
+
+      const erros = json.records_error ?? 0
+      setSyncAllMsg({
+        type: erros > 0 ? 'err' : 'ok',
+        text: `Sync 7 dias concluído — ${json.records_fetched ?? 0} registros buscados, ${json.records_inserted ?? 0} inseridos${erros > 0 ? `, ${erros} erros` : ''}.`,
+      })
+      onRefresh()
+    } catch (e: unknown) {
+      setSyncAllMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro ao sincronizar.' })
+    } finally {
+      setSyncingWeekly(false)
     }
   }
 
@@ -749,8 +781,22 @@ function AbaMetaAds({
           <div className="flex items-center gap-3 shrink-0">
             <span className="text-xs" style={{ color: '#555555' }}>{accounts.length} conta{accounts.length !== 1 ? 's' : ''}</span>
             <button
+              onClick={sincronizarSemanal}
+              disabled={syncingWeekly || syncingAll || syncing !== null || accounts.filter(a => a.ativo).length === 0}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+              style={{ backgroundColor: '#1A1A1A', color: '#C9A84C', border: '1px solid #C9A84C' }}
+              onMouseEnter={e => { if (!syncingWeekly) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A2A2A' }}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'}
+              title="Rebusca os últimos 7 dias na API Meta (use após mudar campos)"
+            >
+              {syncingWeekly
+                ? <><Loader2 className="w-4 h-4 animate-spin" />Sincronizando…</>
+                : <><RefreshCw className="w-4 h-4" />Sync 7 dias</>
+              }
+            </button>
+            <button
               onClick={sincronizarTudo}
-              disabled={syncingAll || syncing !== null || accounts.filter(a => a.ativo).length === 0}
+              disabled={syncingAll || syncingWeekly || syncing !== null || accounts.filter(a => a.ativo).length === 0}
               className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
               style={{ backgroundColor: '#C9A84C', color: '#000000' }}
               onMouseEnter={e => { if (!syncingAll) (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A' }}
@@ -857,8 +903,8 @@ function AbaMetaAds({
                 <div className="flex items-center gap-1 shrink-0">
                   <button
                     onClick={() => sincronizarConta(acc.account_id)}
-                    disabled={syncing === acc.account_id || syncingAll}
-                    title={syncingAll ? 'Sync geral em andamento…' : 'Sincronizar esta conta agora'}
+                    disabled={syncing === acc.account_id || syncingAll || syncingWeekly}
+                    title={syncingAll || syncingWeekly ? 'Sync em andamento…' : 'Sincronizar esta conta agora'}
                     className="p-1.5 rounded-lg disabled:opacity-40 transition-colors"
                     style={{ color: '#888888' }}
                     onMouseEnter={e => {
@@ -1633,6 +1679,412 @@ function AbaActiveCampaign({
   )
 }
 
+// ─── Aba Sendflow ─────────────────────────────────────────────────────────────
+
+interface SendflowCampanha {
+  id: string
+  nome: string
+  total_grupos: number
+  total_membros: number
+  ativo: boolean
+  monitorada: boolean
+  synced_at: string | null
+}
+
+function AbaConfigSendflow({
+  token, onRefresh,
+}: {
+  token: Token | null
+  onRefresh: () => void
+}) {
+  const supabase = createClient()
+  const [apiToken, setApiToken]       = useState('')
+  const [baseUrl, setBaseUrl]         = useState('')
+  const [showToken, setShowToken]     = useState(false)
+  const [savingToken, setSavingToken] = useState(false)
+  const [tokenMsg, setTokenMsg]       = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+
+  const [syncingGrupos, setSyncingGrupos]     = useState(false)
+  const [syncingMetricas, setSyncingMetricas] = useState(false)
+  const [syncGruposMsg, setSyncGruposMsg]     = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [syncMetricasMsg, setSyncMetricasMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+
+  const [campanhas, setCampanhas] = useState<SendflowCampanha[]>([])
+  const [novaId, setNovaId]               = useState('')
+  const [adicionando, setAdicionando]     = useState(false)
+  const [addMsg, setAddMsg]               = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [removendo, setRemovendo]         = useState<string | null>(null)
+
+  const inputStyle: React.CSSProperties = {
+    backgroundColor: '#0A0A0A',
+    border: '1px solid #333333',
+    color: '#FFFFFF',
+    borderRadius: '0.5rem',
+    padding: '0.5rem 0.75rem',
+    fontSize: '0.875rem',
+    outline: 'none',
+    width: '100%',
+  }
+
+  function carregarCampanhas() {
+    supabase
+      .from('sendflow_campanhas')
+      .select('id, nome, total_grupos, total_membros, ativo, monitorada, synced_at')
+      .eq('monitorada', true)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setCampanhas(data ?? []))
+  }
+
+  useEffect(() => {
+    carregarCampanhas()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function salvarToken() {
+    if (!apiToken.trim()) return
+    setSavingToken(true)
+    setTokenMsg(null)
+    try {
+      const res = await fetch('/api/sendflow/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: apiToken.trim(), base_url: baseUrl.trim() || undefined }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error)
+      setApiToken('')
+      setBaseUrl('')
+      setTokenMsg({ type: 'ok', text: 'Token salvo com sucesso.' })
+      onRefresh()
+    } catch (e: unknown) {
+      setTokenMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro ao salvar.' })
+    } finally {
+      setSavingToken(false)
+    }
+  }
+
+  async function sincronizarGrupos() {
+    setSyncingGrupos(true)
+    setSyncGruposMsg(null)
+    try {
+      const res = await fetch('/api/sendflow/sync-grupos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Erro desconhecido')
+      setSyncGruposMsg({ type: 'ok', text: `Concluído — ${json.grupos ?? 0} grupo${json.grupos !== 1 ? 's' : ''} sincronizados.` })
+      carregarCampanhas()
+      onRefresh()
+    } catch (e: unknown) {
+      setSyncGruposMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro ao sincronizar.' })
+    } finally {
+      setSyncingGrupos(false)
+    }
+  }
+
+  async function sincronizarMetricas() {
+    setSyncingMetricas(true)
+    setSyncMetricasMsg(null)
+    try {
+      const res = await fetch('/api/sendflow/sync-metricas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Erro desconhecido')
+      setSyncMetricasMsg({ type: 'ok', text: `Concluído — ${json.upserted ?? 0} registros de métricas.` })
+      onRefresh()
+    } catch (e: unknown) {
+      setSyncMetricasMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro ao sincronizar.' })
+    } finally {
+      setSyncingMetricas(false)
+    }
+  }
+
+  async function adicionarCampanha() {
+    if (!novaId.trim()) return
+    setAdicionando(true)
+    setAddMsg(null)
+    try {
+      const res = await fetch('/api/sendflow/campanha', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: novaId.trim() }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Erro desconhecido')
+      setAddMsg({ type: 'ok', text: `Campanha "${json.nome}" adicionada.` })
+      setNovaId('')
+      carregarCampanhas()
+    } catch (e: unknown) {
+      setAddMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro ao adicionar.' })
+    } finally {
+      setAdicionando(false)
+    }
+  }
+
+  async function removerCampanha(id: string) {
+    setRemovendo(id)
+    try {
+      const res = await fetch('/api/sendflow/campanha', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error)
+      carregarCampanhas()
+    } catch (e: unknown) {
+      console.error('Erro ao remover campanha:', e)
+    } finally {
+      setRemovendo(null)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+
+      {/* Token */}
+      <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
+        <div className="px-5 py-4" style={{ borderBottom: '1px solid #1E1E1E' }}>
+          <div className="flex items-center gap-3">
+            <span className="text-xl">🔑</span>
+            <div className="flex-1">
+              <p className="font-semibold" style={{ color: '#FFFFFF' }}>API Token</p>
+              <p className="text-xs mt-0.5" style={{ color: '#888888' }}>
+                Encontre em Sendflow → Configurações → Integrações → API
+              </p>
+            </div>
+            {token?.ativo
+              ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#0F2A1A', color: '#4ADE80' }}><CheckCircle className="w-3 h-3" />Configurado</span>
+              : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#1A1A1A', color: '#888888' }}><XCircle className="w-3 h-3" />Não configurado</span>
+            }
+          </div>
+        </div>
+
+        <div className="px-5 py-4 space-y-3">
+          {token && (
+            <div className="flex items-center gap-6 text-xs pb-1" style={{ color: '#555555' }}>
+              <span className="flex items-center gap-1"><Clock className="w-3 h-3" />Última sync: {formatData(token.last_sync_at)}</span>
+              <BadgeStatus status={token.last_sync_status} />
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  type={showToken ? 'text' : 'password'}
+                  value={apiToken}
+                  onChange={e => setApiToken(e.target.value)}
+                  placeholder={token ? 'Novo API token (deixe vazio para manter)' : 'Cole seu API token aqui'}
+                  style={{ ...inputStyle, paddingRight: '2.5rem', fontFamily: 'monospace' }}
+                  onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                  onBlur={e => (e.target.style.borderColor = '#333333')}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowToken(v => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2"
+                  style={{ color: '#555555' }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#FFFFFF'}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#555555'}
+                >
+                  {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <button
+                onClick={salvarToken}
+                disabled={savingToken || !apiToken.trim()}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shrink-0"
+                style={{ backgroundColor: '#C9A84C', color: '#000000' }}
+                onMouseEnter={e => { if (!savingToken && apiToken.trim()) (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A' }}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C'}
+              >
+                {savingToken ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Salvar
+              </button>
+            </div>
+            <input
+              type="text"
+              value={baseUrl}
+              onChange={e => setBaseUrl(e.target.value)}
+              placeholder="URL base da API (opcional — ex: https://app.sendflow.com.br/api)"
+              style={{ ...inputStyle, fontFamily: 'monospace' }}
+              onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+              onBlur={e => (e.target.style.borderColor = '#333333')}
+            />
+          </div>
+
+          {tokenMsg && (
+            <p className="text-xs" style={{ color: tokenMsg.type === 'ok' ? '#4ADE80' : '#F87171' }}>
+              {tokenMsg.text}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Sincronização manual */}
+      <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
+        <div className="px-5 py-4" style={{ borderBottom: '1px solid #1E1E1E' }}>
+          <p className="font-semibold" style={{ color: '#FFFFFF' }}>Sincronização Manual</p>
+          <p className="text-xs mt-0.5" style={{ color: '#888888' }}>
+            Campanhas/grupos sincronizam automaticamente a cada 1h · Métricas a cada 15min
+          </p>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          {/* Grupos */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <p className="text-sm font-medium" style={{ color: '#FFFFFF' }}>Campanhas e Grupos</p>
+              <p className="text-xs mt-0.5" style={{ color: '#555555' }}>Busca todas as campanhas e seus grupos na Sendflow</p>
+              {syncGruposMsg && (
+                <p className="text-xs mt-1" style={{ color: syncGruposMsg.type === 'ok' ? '#4ADE80' : '#F87171' }}>
+                  {syncGruposMsg.text}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={sincronizarGrupos}
+              disabled={syncingGrupos || !token?.ativo}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shrink-0"
+              style={{ backgroundColor: '#C9A84C', color: '#000000' }}
+              onMouseEnter={e => { if (!syncingGrupos && token?.ativo) (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A' }}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C'}
+              title={!token?.ativo ? 'Configure o token primeiro' : 'Sincronizar agora'}
+            >
+              {syncingGrupos
+                ? <><Loader2 className="w-4 h-4 animate-spin" />Sincronizando…</>
+                : <><RefreshCw className="w-4 h-4" />Sync Grupos</>
+              }
+            </button>
+          </div>
+
+          <div style={{ borderTop: '1px solid #1E1E1E' }} />
+
+          {/* Métricas */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <p className="text-sm font-medium" style={{ color: '#FFFFFF' }}>Métricas</p>
+              <p className="text-xs mt-0.5" style={{ color: '#555555' }}>Busca adicionados, removidos e cliques dos últimos 7 dias</p>
+              {syncMetricasMsg && (
+                <p className="text-xs mt-1" style={{ color: syncMetricasMsg.type === 'ok' ? '#4ADE80' : '#F87171' }}>
+                  {syncMetricasMsg.text}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={sincronizarMetricas}
+              disabled={syncingMetricas || !token?.ativo}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shrink-0"
+              style={{ backgroundColor: '#C9A84C', color: '#000000' }}
+              onMouseEnter={e => { if (!syncingMetricas && token?.ativo) (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A' }}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C'}
+              title={!token?.ativo ? 'Configure o token primeiro' : 'Sincronizar métricas agora'}
+            >
+              {syncingMetricas
+                ? <><Loader2 className="w-4 h-4 animate-spin" />Sincronizando…</>
+                : <><RefreshCw className="w-4 h-4" />Sync Métricas</>
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Campanhas Monitoradas */}
+      <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
+        <div className="px-5 py-4" style={{ borderBottom: '1px solid #1E1E1E' }}>
+          <p className="font-semibold" style={{ color: '#FFFFFF' }}>Campanhas Monitoradas</p>
+          <p className="text-xs mt-0.5" style={{ color: '#888888' }}>
+            Somente essas campanhas serão sincronizadas automaticamente
+          </p>
+        </div>
+
+        <div className="px-5 py-4 space-y-3">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={novaId}
+              onChange={e => setNovaId(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && adicionarCampanha()}
+              placeholder="Cole o ID da campanha (ex: OEZjXU3Pish6qR8gF7fv)"
+              style={{ ...inputStyle, fontFamily: 'monospace' }}
+              onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+              onBlur={e => (e.target.style.borderColor = '#333333')}
+              disabled={!token?.ativo}
+            />
+            <button
+              onClick={adicionarCampanha}
+              disabled={adicionando || !novaId.trim() || !token?.ativo}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shrink-0"
+              style={{ backgroundColor: '#C9A84C', color: '#000000' }}
+              onMouseEnter={e => { if (!adicionando && novaId.trim() && token?.ativo) (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A' }}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C'}
+              title={!token?.ativo ? 'Configure o token primeiro' : 'Adicionar campanha'}
+            >
+              {adicionando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              Adicionar
+            </button>
+          </div>
+
+          {addMsg && (
+            <p className="text-xs" style={{ color: addMsg.type === 'ok' ? '#4ADE80' : '#F87171' }}>
+              {addMsg.text}
+            </p>
+          )}
+        </div>
+
+        {campanhas.length === 0 ? (
+          <div className="px-5 pb-6 text-center text-sm" style={{ color: '#555555' }}>
+            Nenhuma campanha monitorada. Cole o ID acima para adicionar.
+          </div>
+        ) : (
+          <div style={{ borderTop: '1px solid #1E1E1E' }}>
+            {campanhas.map((c, idx) => (
+              <div
+                key={c.id}
+                className="px-5 py-3 flex items-center gap-4"
+                style={{ borderBottom: idx < campanhas.length - 1 ? '1px solid #1A1A1A' : 'none' }}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium truncate" style={{ color: '#FFFFFF' }}>{c.nome}</p>
+                    {c.ativo
+                      ? <span className="px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: '#0F2A1A', color: '#4ADE80' }}>Ativa</span>
+                      : <span className="px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: '#1A1A1A', color: '#888888' }}>Inativa</span>
+                    }
+                  </div>
+                  <p className="text-xs mt-0.5" style={{ color: '#555555' }}>
+                    <span className="font-mono">{c.id}</span>
+                    {c.total_grupos > 0 && ` · ${c.total_grupos} grupo${c.total_grupos !== 1 ? 's' : ''} · ${c.total_membros.toLocaleString('pt-BR')} membros`}
+                    {c.synced_at ? ` · sync ${formatData(c.synced_at)}` : ''}
+                  </p>
+                </div>
+                <button
+                  onClick={() => removerCampanha(c.id)}
+                  disabled={removendo === c.id}
+                  className="shrink-0 p-1.5 rounded-lg transition-colors disabled:opacity-40"
+                  style={{ color: '#555555' }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#F87171'}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#555555'}
+                  title="Remover da monitoração"
+                >
+                  {removendo === c.id
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <Trash2 className="w-4 h-4" />
+                  }
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function ConfiguracoesClient({ inicial, meuId }: { inicial: DadosConfiguracao; meuId: string }) {
@@ -1703,6 +2155,7 @@ export default function ConfiguracoesClient({ inicial, meuId }: { inicial: Dados
     { key: 'integracoes',     label: 'Integrações' },
     { key: 'meta_ads',        label: 'Meta Ads' },
     { key: 'activecampaign',  label: 'ActiveCampaign' },
+    { key: 'sendflow',        label: 'Sendflow' },
     { key: 'usuarios',        label: 'Usuários' },
   ]
 
@@ -1783,6 +2236,13 @@ export default function ConfiguracoesClient({ inicial, meuId }: { inicial: Dados
       {aba === 'activecampaign' && (
         <AbaActiveCampaign
           token={dados.tokens.find(t => t.integration === 'activecampaign') ?? null}
+          onRefresh={buscarDados}
+        />
+      )}
+
+      {aba === 'sendflow' && (
+        <AbaConfigSendflow
+          token={dados.tokens.find(t => t.integration === 'sendflow') ?? null}
           onRefresh={buscarDados}
         />
       )}

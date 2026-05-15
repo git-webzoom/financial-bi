@@ -12,7 +12,11 @@ export async function POST(req: NextRequest) {
   if (profile?.perfil !== 'admin')
     return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
 
-  const { account_id } = await req.json()
+  const { account_id, mode } = await req.json()
+
+  const payload: Record<string, string> = {}
+  if (account_id) payload.account_id = account_id
+  if (mode)       payload.mode       = mode
 
   const res = await fetch(
     `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/job-meta-ads`,
@@ -22,7 +26,7 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
       },
-      body: JSON.stringify(account_id ? { account_id } : {}),
+      body: JSON.stringify(payload),
     }
   )
 
