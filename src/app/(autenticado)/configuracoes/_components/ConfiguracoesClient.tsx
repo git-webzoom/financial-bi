@@ -74,9 +74,7 @@ const INTEGRACOES = [
 ]
 
 const WEBHOOK_TABELAS = [
-  { tabela: 'raw_vendas',     label: 'Manager Guru — Vendas' },
-  { tabela: 'raw_webnario',   label: 'Webinários' },
-  { tabela: 'raw_grupos_wpp', label: 'Grupos WhatsApp' },
+  { tabela: 'raw_vendas', label: 'Manager Guru — Vendas' },
 ]
 
 type Aba = 'integracoes' | 'manager_guru' | 'meta_ads' | 'activecampaign' | 'sendflow' | 'usuarios' | 'filtros'
@@ -2723,10 +2721,8 @@ export default function ConfiguracoesClient({ inicial, meuId }: { inicial: Dados
         supabase.from('integration_job_runs')
           .select('id, integration, account_id, status, started_at, finished_at, records_fetched, records_inserted, records_error, error_message')
           .order('started_at', { ascending: false }).limit(500),
-        ...['raw_vendas', 'raw_webnario', 'raw_grupos_wpp'].map(t =>
-          supabase.from(t as 'raw_vendas').select('id', { count: 'exact', head: true })
-            .eq('processed', false).not('error', 'is', null)
-        ),
+        supabase.from('raw_vendas').select('id', { count: 'exact', head: true })
+          .eq('processed', false).not('error', 'is', null),
         supabase.from('meta_ad_accounts')
           .select('id, account_id, nome, ativo, last_sync_at, last_sync_status')
           .order('nome'),
@@ -2735,17 +2731,17 @@ export default function ConfiguracoesClient({ inicial, meuId }: { inicial: Dados
           .eq('integration', 'meta_ads').maybeSingle(),
       ])
 
-      const webhookErros = ['raw_vendas', 'raw_webnario', 'raw_grupos_wpp'].map((t, i) => ({
-        tabela: t,
-        count: (rest[i] as { count: number | null }).count ?? 0,
-      }))
+      const webhookErros = [{
+        tabela: 'raw_vendas',
+        count: (rest[0] as { count: number | null }).count ?? 0,
+      }]
 
       setDados({
         tokens:        tokens ?? [],
         jobs:          jobs ?? [],
         webhookErros,
-        metaAccounts:  (rest[3] as { data: MetaAccount[] | null }).data ?? [],
-        metaToken:     (rest[4] as { data: MetaToken | null }).data ?? null,
+        metaAccounts:  (rest[1] as { data: MetaAccount[] | null }).data ?? [],
+        metaToken:     (rest[2] as { data: MetaToken | null }).data ?? null,
       })
       setUltimaAtualizacao(new Date())
     })

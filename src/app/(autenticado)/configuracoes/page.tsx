@@ -20,8 +20,6 @@ export default async function ConfiguracoesPage() {
     { data: tokens },
     { data: jobs },
     { count: errosVendas },
-    { count: errosWebnario },
-    { count: errosGrupos },
     { data: metaAccounts },
     { data: metaToken },
   ] = await Promise.all([
@@ -34,12 +32,6 @@ export default async function ConfiguracoesPage() {
       .order('started_at', { ascending: false })
       .limit(50),
     supabase.from('raw_vendas')
-      .select('id', { count: 'exact', head: true })
-      .eq('processed', false).not('error', 'is', null),
-    supabase.from('raw_webnario')
-      .select('id', { count: 'exact', head: true })
-      .eq('processed', false).not('error', 'is', null),
-    supabase.from('raw_grupos_wpp')
       .select('id', { count: 'exact', head: true })
       .eq('processed', false).not('error', 'is', null),
     supabase
@@ -57,9 +49,7 @@ export default async function ConfiguracoesPage() {
     tokens: tokens ?? [],
     jobs: jobs ?? [],
     webhookErros: [
-      { tabela: 'raw_vendas',     count: errosVendas   ?? 0 },
-      { tabela: 'raw_webnario',   count: errosWebnario ?? 0 },
-      { tabela: 'raw_grupos_wpp', count: errosGrupos   ?? 0 },
+      { tabela: 'raw_vendas', count: errosVendas ?? 0 },
     ],
     metaAccounts: metaAccounts ?? [],
     metaToken: metaToken ?? null,
