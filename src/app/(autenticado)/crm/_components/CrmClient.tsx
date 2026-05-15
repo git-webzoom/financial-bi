@@ -93,7 +93,7 @@ async function buscarDadosSemana(
     outrasPorContato[os.contato_id].push(os.numero_semana)
   }
 
-  const inscritos: InscritoCrm[] = lista.map((i) => {
+  const inscritos = (lista.map((i) => {
     const contatoId = String(i.contato_id ?? '')
     return {
       id: i.id as string, contato_id: contatoId, crm_id: i.crm_id as string ?? '',
@@ -112,7 +112,7 @@ async function buscarDadosSemana(
       comprou: compradoresSet.has(contatoId), valor_compras_total: totalPorContato[contatoId] ?? 0,
       outras_semanas: outrasPorContato[contatoId] ?? [],
     }
-  })
+  })) as unknown as InscritoCrm[]
 
   return { periodo, inscritos }
 }
