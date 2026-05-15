@@ -94,7 +94,7 @@ async function buscarDadosSemana(
   }
 
   const inscritos: InscritoCrm[] = lista.map((i) => {
-    const contatoId = i.contato_id ?? ''
+    const contatoId = String(i.contato_id ?? '')
     return {
       id: i.id as string, contato_id: contatoId, crm_id: i.crm_id as string ?? '',
       numero_semana: i.numero_semana as number, data_inscricao: i.data_inscricao as string ?? null,
