@@ -67,6 +67,7 @@ const STATUS_OPTIONS = [
   { value: 'approved',   label: 'Aprovada' },
   { value: 'refunded',   label: 'Reembolsada' },
   { value: 'chargeback', label: 'Chargeback' },
+  { value: 'dispute',    label: 'Disputa' },
   { value: 'cancelled',  label: 'Cancelada' },
   { value: 'pending',    label: 'Pendente' },
 ]
@@ -91,6 +92,7 @@ const STATUS_BADGE: Record<string, { bg: string; text: string }> = {
   refunded:     { bg: '#2A0F0F', text: '#F87171' },
   refunded_sol: { bg: '#2A1A0F', text: '#FB923C' },
   chargeback:   { bg: '#2A0F0F', text: '#F87171' },
+  dispute:      { bg: '#2A1A2A', text: '#C084FC' },
   cancelled:    { bg: '#1A1A1A', text: '#888888' },
   pending:      { bg: '#2A2A0F', text: '#FACC15' },
 }
@@ -101,6 +103,7 @@ const STATUS_LABEL: Record<string, string> = {
   refunded:     'Reembolsada',
   refunded_sol: 'Reembolso Sol.',
   chargeback:   'Chargeback',
+  dispute:      'Disputa',
   cancelled:    'Cancelada',
   pending:      'Pendente',
 }
@@ -354,7 +357,7 @@ export default function VendasClient({
   }) => {
     startTransition(async () => {
       const inicio = params.dataInicio + 'T00:00:00-03:00'
-      const fim    = params.dataFim    + 'T23:59:59-03:00'
+      const fim    = params.dataFim    + 'T23:59:59.999-03:00'
 
       let q = supabase
         .from('vendas')

@@ -9,6 +9,7 @@ import {
   Users,
   Video,
   MessageCircle,
+  Package,
   Settings,
   LogOut,
 } from 'lucide-react'
@@ -21,6 +22,7 @@ const navItems = [
   { label: 'CRM',       href: '/crm',       icon: Users },
   { label: 'Webinários',href: '/webnario',  icon: Video },
   { label: 'Grupos',    href: '/grupos',    icon: MessageCircle },
+  { label: 'Produtos',   href: '/produtos',  icon: Package },
 ]
 
 interface SidebarProps {

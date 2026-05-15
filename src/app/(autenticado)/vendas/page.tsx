@@ -17,7 +17,7 @@ export default async function VendasPage() {
   const dataFim    = dataISOLocal(hoje)
   const dataInicio = dataISOLocal(seteDiasAtras)
   const inicio = dataInicio + 'T00:00:00-03:00'
-  const fim    = dataFim    + 'T23:59:59-03:00'
+  const fim    = dataFim    + 'T23:59:59.999-03:00'
 
   // Produtos distintos que foram vendidos — tudo vem de vendas
   const { data: produtosRaw } = await supabase

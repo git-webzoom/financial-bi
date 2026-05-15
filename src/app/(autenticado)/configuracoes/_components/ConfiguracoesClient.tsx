@@ -77,7 +77,7 @@ const WEBHOOK_TABELAS = [
   { tabela: 'raw_grupos_wpp', label: 'Grupos WhatsApp' },
 ]
 
-type Aba = 'integracoes' | 'meta_ads' | 'activecampaign' | 'sendflow' | 'usuarios'
+type Aba = 'integracoes' | 'manager_guru' | 'meta_ads' | 'activecampaign' | 'sendflow' | 'usuarios'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -2085,6 +2085,199 @@ function AbaConfigSendflow({
   )
 }
 
+// ─── Aba Manager Guru ─────────────────────────────────────────────────────────
+
+function AbaManagerGuru({
+  token, jobs, onRefresh,
+}: {
+  token: Token | null
+  jobs: JobRun[]
+  onRefresh: () => void
+}) {
+  const [apiToken, setApiToken]       = useState('')
+  const [showToken, setShowToken]     = useState(false)
+  const [savingToken, setSavingToken] = useState(false)
+  const [tokenMsg, setTokenMsg]       = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [syncing, setSyncing]         = useState(false)
+  const [syncMsg, setSyncMsg]         = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+
+  const inputStyle: React.CSSProperties = {
+    backgroundColor: '#0A0A0A',
+    border: '1px solid #333333',
+    color: '#FFFFFF',
+    borderRadius: '0.5rem',
+    padding: '0.5rem 0.75rem',
+    fontSize: '0.875rem',
+    outline: 'none',
+    width: '100%',
+  }
+
+  async function salvarToken() {
+    if (!apiToken.trim()) return
+    setSavingToken(true)
+    setTokenMsg(null)
+    try {
+      const res = await fetch('/api/manager-guru/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: apiToken.trim() }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error)
+      setApiToken('')
+      setTokenMsg({ type: 'ok', text: 'Token salvo com sucesso.' })
+      onRefresh()
+    } catch (e: unknown) {
+      setTokenMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro ao salvar.' })
+    } finally {
+      setSavingToken(false)
+    }
+  }
+
+  async function sincronizar() {
+    setSyncing(true)
+    setSyncMsg(null)
+    try {
+      const res = await fetch('/api/manager-guru/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Erro desconhecido')
+      setSyncMsg({ type: 'ok', text: `Concluído — ${json.products ?? 0} produtos e ${json.offers ?? 0} ofertas sincronizados.` })
+      onRefresh()
+    } catch (e: unknown) {
+      setSyncMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro ao sincronizar.' })
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+
+      {/* Token */}
+      <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
+        <div className="px-5 py-4" style={{ borderBottom: '1px solid #1E1E1E' }}>
+          <div className="flex items-center gap-3">
+            <span className="text-xl">🔑</span>
+            <div className="flex-1">
+              <p className="font-semibold" style={{ color: '#FFFFFF' }}>API Token</p>
+              <p className="text-xs mt-0.5" style={{ color: '#888888' }}>
+                Encontre em Manager Guru → Configurações → Integrações → API
+              </p>
+            </div>
+            {token?.ativo
+              ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#0F2A1A', color: '#4ADE80' }}><CheckCircle className="w-3 h-3" />Configurado</span>
+              : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#1A1A1A', color: '#888888' }}><XCircle className="w-3 h-3" />Não configurado</span>
+            }
+          </div>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <input
+                type={showToken ? 'text' : 'password'}
+                placeholder="Cole o token aqui..."
+                value={apiToken}
+                onChange={e => setApiToken(e.target.value)}
+                style={inputStyle}
+              />
+              <button
+                type="button"
+                onClick={() => setShowToken(v => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2"
+                style={{ color: '#555555' }}
+              >
+                {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <button
+              onClick={salvarToken}
+              disabled={savingToken || !apiToken.trim()}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-50"
+              style={{ backgroundColor: '#C9A84C', color: '#000000' }}
+            >
+              {savingToken ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              Salvar
+            </button>
+          </div>
+          {tokenMsg && (
+            <p className="text-xs" style={{ color: tokenMsg.type === 'ok' ? '#4ADE80' : '#F87171' }}>
+              {tokenMsg.text}
+            </p>
+          )}
+          {token?.last_sync_at && (
+            <p className="text-xs" style={{ color: '#555555' }}>
+              Último sync: {formatData(token.last_sync_at)} · <BadgeStatus status={token.last_sync_status} />
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Sync Manual */}
+      <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
+        <div className="px-5 py-4" style={{ borderBottom: '1px solid #1E1E1E' }}>
+          <div className="flex items-center gap-3">
+            <span className="text-xl">🔄</span>
+            <div className="flex-1">
+              <p className="font-semibold" style={{ color: '#FFFFFF' }}>Sincronização</p>
+              <p className="text-xs mt-0.5" style={{ color: '#888888' }}>
+                Sincroniza automaticamente todo dia às 03h BRT. Use o botão para sync manual.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={sincronizar}
+              disabled={syncing || !token?.ativo}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-50"
+              style={{ backgroundColor: '#1A1A1A', border: '1px solid #C9A84C', color: '#C9A84C' }}
+            >
+              {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+              Sync Manual
+            </button>
+            {!token?.ativo && (
+              <p className="text-xs" style={{ color: '#555555' }}>Configure o token primeiro</p>
+            )}
+          </div>
+          {syncMsg && (
+            <p className="text-xs" style={{ color: syncMsg.type === 'ok' ? '#4ADE80' : '#F87171' }}>
+              {syncMsg.text}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Histórico de Jobs */}
+      {jobs.length > 0 && (
+        <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
+          <div className="px-5 py-3" style={{ borderBottom: '1px solid #1E1E1E' }}>
+            <p className="text-sm font-semibold" style={{ color: '#FFFFFF' }}>Histórico de Execuções</p>
+          </div>
+          <div className="divide-y" style={{ '--tw-divide-opacity': 1 } as React.CSSProperties}>
+            {jobs.slice(0, 10).map(job => (
+              <div key={job.id} className="px-5 py-3 grid grid-cols-4 gap-2 text-xs" style={{ borderBottom: '1px solid #1A1A1A' }}>
+                <div style={{ color: '#888888' }}>{formatData(job.started_at)}</div>
+                <div><BadgeStatus status={job.status} /></div>
+                <div style={{ color: '#CCCCCC' }}>
+                  {job.integration === 'manager_guru'
+                    ? `${job.records_fetched ?? 0} produtos · ${job.records_inserted ?? 0} ofertas`
+                    : `${job.records_fetched ?? 0} buscados · ${job.records_inserted ?? 0} salvos`
+                  }
+                </div>
+                <div className="truncate" style={{ color: '#F87171' }}>{job.error_message ?? ''}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function ConfiguracoesClient({ inicial, meuId }: { inicial: DadosConfiguracao; meuId: string }) {
@@ -2152,11 +2345,12 @@ export default function ConfiguracoesClient({ inicial, meuId }: { inicial: Dados
   }
 
   const abas: { key: Aba; label: string }[] = [
-    { key: 'integracoes',     label: 'Integrações' },
-    { key: 'meta_ads',        label: 'Meta Ads' },
-    { key: 'activecampaign',  label: 'ActiveCampaign' },
-    { key: 'sendflow',        label: 'Sendflow' },
-    { key: 'usuarios',        label: 'Usuários' },
+    { key: 'integracoes',    label: 'Integrações' },
+    { key: 'manager_guru',   label: 'Manager Guru' },
+    { key: 'meta_ads',       label: 'Meta Ads' },
+    { key: 'activecampaign', label: 'ActiveCampaign' },
+    { key: 'sendflow',       label: 'Sendflow' },
+    { key: 'usuarios',       label: 'Usuários' },
   ]
 
   return (
@@ -2236,6 +2430,14 @@ export default function ConfiguracoesClient({ inicial, meuId }: { inicial: Dados
       {aba === 'activecampaign' && (
         <AbaActiveCampaign
           token={dados.tokens.find(t => t.integration === 'activecampaign') ?? null}
+          onRefresh={buscarDados}
+        />
+      )}
+
+      {aba === 'manager_guru' && (
+        <AbaManagerGuru
+          token={dados.tokens.find(t => t.integration === 'manager_guru') ?? null}
+          jobs={jobsDe('manager_guru')}
           onRefresh={buscarDados}
         />
       )}
