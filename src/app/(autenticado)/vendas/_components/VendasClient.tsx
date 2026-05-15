@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { formatMoeda, formatData } from '@/lib/format'
 import VendaDrawer from './VendaDrawer'
 import { Search, X, ChevronDown } from 'lucide-react'
+import type { FiltroPersonalizado, RegraFiltro } from '@/lib/filtros-personalizados'
 
 const PAGE_SIZE = 20
 
@@ -269,6 +270,19 @@ const selectStyle: React.CSSProperties = {
   outline: 'none',
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function aplicarRegras(q: any, regras: RegraFiltro[]) {
+  for (const { campo, operador, valor } of regras) {
+    switch (operador) {
+      case 'contem':     q = q.ilike(campo, `%${valor}%`); break
+      case 'nao_contem': q = q.not(campo, 'ilike', `%${valor}%`); break
+      case 'igual':      q = q.eq(campo, valor); break
+      case 'comeca_com': q = q.ilike(campo, `${valor}%`); break
+    }
+  }
+  return q
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function VendasClient({
@@ -281,6 +295,11 @@ export default function VendasClient({
 }: Props) {
   const supabase = createClient()
   const [isPending, startTransition] = useTransition()
+
+  const filtroPersonalizadoRef = useRef<FiltroPersonalizado | null>(null)
+
+  const [filtrosSalvos,    setFiltrosSalvos]    = useState<FiltroPersonalizado[]>([])
+  const [filtroSalvoAtivo, setFiltroSalvoAtivo] = useState('')
 
   const [dataInicio, setDataInicio] = useState(dataInicioDefault)
   const [dataFim, setDataFim]       = useState(dataFimDefault)
@@ -299,6 +318,32 @@ export default function VendasClient({
   const [vendaSelecionada, setVendaSelecionada] = useState<Venda | null>(null)
 
   const totalPaginas = Math.ceil(total / PAGE_SIZE)
+
+  useEffect(() => {
+    async function carregarFiltrosSalvos() {
+      const { data: filtrosData } = await supabase
+        .from('filtros_personalizados')
+        .select('id, nome, modulo, ativo, criado_por, created_at')
+        .eq('modulo', 'vendas')
+        .eq('ativo', true)
+        .order('nome')
+
+      if (!filtrosData?.length) return
+
+      const { data: regrasData } = await supabase
+        .from('filtros_personalizados_regras')
+        .select('id, filtro_id, campo, operador, valor, ordem')
+        .in('filtro_id', filtrosData.map(f => f.id))
+        .order('ordem')
+
+      setFiltrosSalvos(filtrosData.map(f => ({
+        ...f,
+        regras: (regrasData ?? []).filter(r => r.filtro_id === f.id),
+      })))
+    }
+    carregarFiltrosSalvos()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Lê filtro de e-mails vindo do CRM (card Compradores)
   useEffect(() => {
@@ -376,6 +421,7 @@ export default function VendasClient({
       if (params.status)      q = q.eq('status', params.status)
       if (params.pagamento)   q = q.ilike('pagamento', `%${params.pagamento}%`)
       if (params.marketplace) q = q.eq('marketplace', params.marketplace)
+      if (filtroPersonalizadoRef.current?.regras?.length) q = aplicarRegras(q, filtroPersonalizadoRef.current.regras)
 
       const { data, count } = await q
       setVendas((data as Venda[]) ?? [])
@@ -410,10 +456,19 @@ export default function VendasClient({
     buscar({ dataInicio, dataFim, produtoId, status, pagamento, marketplace, pagina: novaPagina, emails: emailsFiltro })
   }
 
+  function handleFiltroSalvo(id: string) {
+    const filtro = filtrosSalvos.find(f => f.id === id) ?? null
+    filtroPersonalizadoRef.current = filtro
+    setFiltroSalvoAtivo(id)
+    aplicarFiltros(0)
+  }
+
   function limparFiltros() {
     setProdutoId(''); setStatus(''); setPagamento(''); setMarketplace('')
     setEmailsFiltro([])
     setTodasVendasEmails([])
+    filtroPersonalizadoRef.current = null
+    setFiltroSalvoAtivo('')
     setPagina(0)
     buscar({ dataInicio, dataFim, produtoId: '', status: '', pagamento: '', marketplace: '', pagina: 0, emails: [] })
   }
@@ -522,6 +577,24 @@ export default function VendasClient({
               {MARKETPLACE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
+
+          {filtrosSalvos.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Filtro salvo</label>
+              <select
+                value={filtroSalvoAtivo}
+                onChange={e => handleFiltroSalvo(e.target.value)}
+                style={selectStyle}
+                onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                onBlur={e => (e.target.style.borderColor = '#222222')}
+              >
+                <option value="">Nenhum</option>
+                {filtrosSalvos.map(f => (
+                  <option key={f.id} value={f.id}>{f.nome}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="flex gap-2 pb-0.5">
             <button

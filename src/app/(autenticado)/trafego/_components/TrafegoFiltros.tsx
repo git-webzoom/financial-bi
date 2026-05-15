@@ -2,14 +2,18 @@
 
 import SelectBusca from './SelectBusca'
 import type { FiltrosTrafego, MetaAccount } from './TrafegoClient'
+import type { FiltroPersonalizado } from '@/lib/filtros-personalizados'
 
 interface Props {
-  filtros:      FiltrosTrafego
-  metaAccounts: MetaAccount[]
-  campanhas:    string[]
-  adsets:       string[]
-  carregando:   boolean
-  onChange:     (f: Partial<FiltrosTrafego>) => void
+  filtros:              FiltrosTrafego
+  metaAccounts:         MetaAccount[]
+  campanhas:            string[]
+  adsets:               string[]
+  carregando:           boolean
+  onChange:             (f: Partial<FiltrosTrafego>) => void
+  filtrosSalvos:        FiltroPersonalizado[]
+  filtroSalvoAtivo:     string
+  onFiltroSalvo:        (id: string) => void
 }
 
 const inputStyle: React.CSSProperties = {
@@ -24,6 +28,7 @@ const inputStyle: React.CSSProperties = {
 
 export default function TrafegoFiltros({
   filtros, metaAccounts, campanhas, adsets, carregando, onChange,
+  filtrosSalvos, filtroSalvoAtivo, onFiltroSalvo,
 }: Props) {
   const opcoesContas    = metaAccounts.map(a => ({ value: a.account_id, label: a.nome }))
   const opcoesCampanhas = campanhas.map(c => ({ value: c, label: c }))
@@ -99,9 +104,29 @@ export default function TrafegoFiltros({
           />
         </div>
 
+        {/* Filtro salvo */}
+        {filtrosSalvos.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Filtro salvo</label>
+            <select
+              value={filtroSalvoAtivo}
+              onChange={e => onFiltroSalvo(e.target.value)}
+              disabled={carregando}
+              style={inputStyle}
+              onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+              onBlur={e => (e.target.style.borderColor = '#222222')}
+            >
+              <option value="">Nenhum</option>
+              {filtrosSalvos.map(f => (
+                <option key={f.id} value={f.id}>{f.nome}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Limpar */}
         <button
-          onClick={() => onChange({ conta: '', campanha: '', adset: '' })}
+          onClick={() => { onChange({ conta: '', campanha: '', adset: '' }); onFiltroSalvo('') }}
           disabled={carregando}
           className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
           style={{ backgroundColor: 'transparent', border: '1px solid #333333', color: '#888888' }}

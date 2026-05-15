@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useTransition } from 'react'
+import { useState, useCallback, useTransition, useRef, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatMoeda, formatDataCurta } from '@/lib/format'
@@ -8,6 +8,7 @@ import TrafegoKpis from './TrafegoKpis'
 import TrafegoFiltros from './TrafegoFiltros'
 import TrafegoGrafico from './TrafegoGrafico'
 import TrafegoTabela from './TrafegoTabela'
+import type { FiltroPersonalizado, RegraFiltro } from '@/lib/filtros-personalizados'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -68,20 +69,62 @@ interface Props {
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function aplicarRegras(q: any, regras: RegraFiltro[]) {
+  for (const { campo, operador, valor } of regras) {
+    switch (operador) {
+      case 'contem':     q = q.ilike(campo, `%${valor}%`); break
+      case 'nao_contem': q = q.not(campo, 'ilike', `%${valor}%`); break
+      case 'igual':      q = q.eq(campo, valor); break
+      case 'comeca_com': q = q.ilike(campo, `${valor}%`); break
+    }
+  }
+  return q
+}
+
 export default function TrafegoClient({ inicial, filtrosDefault, pageSize }: Props) {
   const supabase  = createClient()
   const router    = useRouter()
   const pathname  = usePathname()
   const [, startTransition] = useTransition()
 
-  const [filtros,    setFiltros]    = useState<FiltrosTrafego>(filtrosDefault)
-  const [kpis,       setKpis]       = useState(inicial.kpis)
-  const [grafico,    setGrafico]    = useState(inicial.grafico)
-  const [registros,  setRegistros]  = useState(inicial.registros)
-  const [total,      setTotal]      = useState(inicial.totalRegistros)
-  const [campanhas,  setCampanhas]  = useState(inicial.campanhas)
-  const [adsets,     setAdsets]     = useState(inicial.adsets)
-  const [carregando, setCarregando] = useState(false)
+  const filtroPersonalizadoRef = useRef<FiltroPersonalizado | null>(null)
+
+  const [filtros,          setFiltros]          = useState<FiltrosTrafego>(filtrosDefault)
+  const [kpis,             setKpis]             = useState(inicial.kpis)
+  const [grafico,          setGrafico]          = useState(inicial.grafico)
+  const [registros,        setRegistros]        = useState(inicial.registros)
+  const [total,            setTotal]            = useState(inicial.totalRegistros)
+  const [campanhas,        setCampanhas]        = useState(inicial.campanhas)
+  const [adsets,           setAdsets]           = useState(inicial.adsets)
+  const [carregando,       setCarregando]       = useState(false)
+  const [filtrosSalvos,    setFiltrosSalvos]    = useState<FiltroPersonalizado[]>([])
+  const [filtroSalvoAtivo, setFiltroSalvoAtivo] = useState('')
+
+  useEffect(() => {
+    async function carregarFiltrosSalvos() {
+      const { data: filtrosData } = await supabase
+        .from('filtros_personalizados')
+        .select('id, nome, modulo, ativo, criado_por, created_at')
+        .eq('modulo', 'trafego')
+        .eq('ativo', true)
+        .order('nome')
+
+      if (!filtrosData?.length) return
+
+      const { data: regrasData } = await supabase
+        .from('filtros_personalizados_regras')
+        .select('id, filtro_id, campo, operador, valor, ordem')
+        .in('filtro_id', filtrosData.map(f => f.id))
+        .order('ordem')
+
+      setFiltrosSalvos(filtrosData.map(f => ({
+        ...f,
+        regras: (regrasData ?? []).filter(r => r.filtro_id === f.id),
+      })))
+    }
+    carregarFiltrosSalvos()
+  }, [supabase])
 
   const buscar = useCallback(async (f: FiltrosTrafego) => {
     setCarregando(true)
@@ -95,6 +138,7 @@ export default function TrafegoClient({ inicial, filtrosDefault, pageSize }: Pro
       if (f.conta)    kpiQ = kpiQ.eq('ad_account_id', f.conta)
       if (f.campanha) kpiQ = kpiQ.eq('campaign_name', f.campanha)
       if (f.adset)    kpiQ = kpiQ.eq('adset_name', f.adset)
+      if (filtroPersonalizadoRef.current?.regras?.length) kpiQ = aplicarRegras(kpiQ, filtroPersonalizadoRef.current.regras)
       const { data: kpiRows } = await kpiQ
 
       // Alcance deduplcado: sem campanha/adset usa trafego_reach (nível de conta, igual BM)
@@ -135,6 +179,7 @@ export default function TrafegoClient({ inicial, filtrosDefault, pageSize }: Pro
       if (f.conta)    gQ = gQ.eq('ad_account_id', f.conta)
       if (f.campanha) gQ = gQ.eq('campaign_name', f.campanha)
       if (f.adset)    gQ = gQ.eq('adset_name', f.adset)
+      if (filtroPersonalizadoRef.current?.regras?.length) gQ = aplicarRegras(gQ, filtroPersonalizadoRef.current.regras)
       const { data: gRaw } = await gQ
 
       const gMap = new Map<string, { investido: number; leads: number }>()
@@ -152,6 +197,7 @@ export default function TrafegoClient({ inicial, filtrosDefault, pageSize }: Pro
       let cQ = supabase.from('trafego').select('campaign_name')
         .gte('date_ref', f.inicio).lte('date_ref', f.fim)
       if (f.conta) cQ = cQ.eq('ad_account_id', f.conta)
+      if (filtroPersonalizadoRef.current?.regras?.length) cQ = aplicarRegras(cQ, filtroPersonalizadoRef.current.regras)
       const { data: cRaw } = await cQ
       setCampanhas(Array.from(new Set((cRaw ?? []).map(r => r.campaign_name).filter(Boolean))).sort() as string[])
 
@@ -160,6 +206,7 @@ export default function TrafegoClient({ inicial, filtrosDefault, pageSize }: Pro
         .gte('date_ref', f.inicio).lte('date_ref', f.fim)
       if (f.conta)    aQ = aQ.eq('ad_account_id', f.conta)
       if (f.campanha) aQ = aQ.eq('campaign_name', f.campanha)
+      if (filtroPersonalizadoRef.current?.regras?.length) aQ = aplicarRegras(aQ, filtroPersonalizadoRef.current.regras)
       const { data: aRaw } = await aQ
       setAdsets(Array.from(new Set((aRaw ?? []).map(r => r.adset_name).filter(Boolean))).sort() as string[])
 
@@ -174,6 +221,7 @@ export default function TrafegoClient({ inicial, filtrosDefault, pageSize }: Pro
       if (f.conta)    tQ = tQ.eq('ad_account_id', f.conta)
       if (f.campanha) tQ = tQ.eq('campaign_name', f.campanha)
       if (f.adset)    tQ = tQ.eq('adset_name', f.adset)
+      if (filtroPersonalizadoRef.current?.regras?.length) tQ = aplicarRegras(tQ, filtroPersonalizadoRef.current.regras)
       const { data: tData, count: tCount } = await tQ
       setRegistros(tData ?? [])
       setTotal(tCount ?? 0)
@@ -206,6 +254,13 @@ export default function TrafegoClient({ inicial, filtrosDefault, pageSize }: Pro
     buscar(f)
   }
 
+  function handleFiltroSalvo(id: string) {
+    const filtro = filtrosSalvos.find(f => f.id === id) ?? null
+    filtroPersonalizadoRef.current = filtro
+    setFiltroSalvoAtivo(id)
+    buscar({ ...filtros, pagina: 0 })
+  }
+
   return (
     <div className="p-6 space-y-5">
       <div>
@@ -222,6 +277,9 @@ export default function TrafegoClient({ inicial, filtrosDefault, pageSize }: Pro
         adsets={adsets}
         carregando={carregando}
         onChange={aplicarFiltros}
+        filtrosSalvos={filtrosSalvos}
+        filtroSalvoAtivo={filtroSalvoAtivo}
+        onFiltroSalvo={handleFiltroSalvo}
       />
 
       <TrafegoGrafico dados={grafico} />

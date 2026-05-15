@@ -8,6 +8,8 @@ import {
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight, RefreshCw, Loader2,
   Plus, Trash2, Eye, EyeOff, Save, Zap, Users, ShieldCheck, User,
 } from 'lucide-react'
+import type { FiltroPersonalizado, RegraFiltro, Modulo, Operador } from '@/lib/filtros-personalizados'
+import { CAMPOS_POR_MODULO, OPERADORES } from '@/lib/filtros-personalizados'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -77,7 +79,7 @@ const WEBHOOK_TABELAS = [
   { tabela: 'raw_grupos_wpp', label: 'Grupos WhatsApp' },
 ]
 
-type Aba = 'integracoes' | 'manager_guru' | 'meta_ads' | 'activecampaign' | 'sendflow' | 'usuarios'
+type Aba = 'integracoes' | 'manager_guru' | 'meta_ads' | 'activecampaign' | 'sendflow' | 'usuarios' | 'filtros'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -2278,6 +2280,479 @@ function AbaManagerGuru({
   )
 }
 
+// ─── Aba Filtros Personalizados ───────────────────────────────────────────────
+
+function AbaFiltrosPersonalizados() {
+  const supabase = createClient()
+
+  const [filtros,     setFiltros]     = useState<FiltroPersonalizado[]>([])
+  const [carregando,  setCarregando]  = useState(true)
+  const [msg,         setMsg]         = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [editando,    setEditando]    = useState<FiltroPersonalizado | null>(null)
+  const [formAberto,  setFormAberto]  = useState(false)
+  const [formNome,    setFormNome]    = useState('')
+  const [formModulo,  setFormModulo]  = useState<Modulo>('trafego')
+  const [formRegras,  setFormRegras]  = useState<RegraFiltro[]>([
+    { campo: 'campaign_name', operador: 'contem', valor: '', ordem: 0 },
+  ])
+  const [salvando,    setSalvando]    = useState(false)
+  const [removendoId, setRemovendoId] = useState<string | null>(null)
+
+  const inputStyle: React.CSSProperties = {
+    backgroundColor: '#0A0A0A',
+    border: '1px solid #333333',
+    color: '#FFFFFF',
+    borderRadius: '0.5rem',
+    padding: '0.5rem 0.75rem',
+    fontSize: '0.875rem',
+    outline: 'none',
+  }
+
+  async function carregar() {
+    setCarregando(true)
+    const { data: filtrosData } = await supabase
+      .from('filtros_personalizados')
+      .select('id, nome, modulo, ativo, criado_por, created_at')
+      .order('modulo').order('nome')
+
+    if (!filtrosData) { setCarregando(false); return }
+
+    const ids = filtrosData.map(f => f.id)
+    const { data: regrasData } = ids.length > 0
+      ? await supabase
+          .from('filtros_personalizados_regras')
+          .select('id, filtro_id, campo, operador, valor, ordem')
+          .in('filtro_id', ids)
+          .order('ordem')
+      : { data: [] }
+
+    setFiltros(filtrosData.map(f => ({
+      ...f,
+      regras: (regrasData ?? []).filter(r => r.filtro_id === f.id),
+    })))
+    setCarregando(false)
+  }
+
+  useEffect(() => { carregar() }, [])
+
+  function abrirCriacao() {
+    setEditando(null)
+    setFormNome('')
+    setFormModulo('trafego')
+    setFormRegras([{ campo: 'campaign_name', operador: 'contem', valor: '', ordem: 0 }])
+    setFormAberto(true)
+  }
+
+  function abrirEdicao(f: FiltroPersonalizado) {
+    setEditando(f)
+    setFormNome(f.nome)
+    setFormModulo(f.modulo as Modulo)
+    setFormRegras(f.regras.length > 0
+      ? f.regras.map(r => ({ ...r }))
+      : [{ campo: CAMPOS_POR_MODULO[f.modulo as Modulo][0].value, operador: 'contem' as Operador, valor: '', ordem: 0 }]
+    )
+    setFormAberto(true)
+  }
+
+  function adicionarRegra() {
+    const campoDefault = CAMPOS_POR_MODULO[formModulo][0].value
+    setFormRegras(prev => [
+      ...prev,
+      { campo: campoDefault, operador: 'contem' as Operador, valor: '', ordem: prev.length },
+    ])
+  }
+
+  function removerRegra(idx: number) {
+    setFormRegras(prev => prev.filter((_, i) => i !== idx).map((r, i) => ({ ...r, ordem: i })))
+  }
+
+  function atualizarRegra(idx: number, patch: Partial<RegraFiltro>) {
+    setFormRegras(prev => prev.map((r, i) => i === idx ? { ...r, ...patch } : r))
+  }
+
+  async function salvar() {
+    if (!formNome.trim()) { setMsg({ type: 'err', text: 'Informe um nome para o filtro.' }); return }
+    if (formRegras.some(r => !r.valor.trim())) { setMsg({ type: 'err', text: 'Preencha o valor de todas as regras.' }); return }
+
+    setSalvando(true)
+    setMsg(null)
+
+    try {
+      if (editando) {
+        const { error: errFiltro } = await supabase
+          .from('filtros_personalizados')
+          .update({ nome: formNome.trim(), modulo: formModulo, updated_at: new Date().toISOString() })
+          .eq('id', editando.id)
+        if (errFiltro) throw new Error(errFiltro.message)
+
+        await supabase.from('filtros_personalizados_regras').delete().eq('filtro_id', editando.id)
+        const { error: errRegras } = await supabase
+          .from('filtros_personalizados_regras')
+          .insert(formRegras.map((r, i) => ({
+            filtro_id: editando.id,
+            campo:     r.campo,
+            operador:  r.operador,
+            valor:     r.valor.trim(),
+            ordem:     i,
+          })))
+        if (errRegras) throw new Error(errRegras.message)
+        setMsg({ type: 'ok', text: 'Filtro atualizado com sucesso.' })
+      } else {
+        const { data: novoFiltro, error: errFiltro } = await supabase
+          .from('filtros_personalizados')
+          .insert({ nome: formNome.trim(), modulo: formModulo })
+          .select('id')
+          .single()
+        if (errFiltro || !novoFiltro) throw new Error(errFiltro?.message ?? 'Erro ao criar filtro.')
+
+        const { error: errRegras } = await supabase
+          .from('filtros_personalizados_regras')
+          .insert(formRegras.map((r, i) => ({
+            filtro_id: novoFiltro.id,
+            campo:     r.campo,
+            operador:  r.operador,
+            valor:     r.valor.trim(),
+            ordem:     i,
+          })))
+        if (errRegras) throw new Error(errRegras.message)
+        setMsg({ type: 'ok', text: 'Filtro criado com sucesso.' })
+      }
+
+      setFormAberto(false)
+      await carregar()
+    } catch (e: unknown) {
+      setMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro desconhecido.' })
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  async function remover(id: string, nome: string) {
+    if (!confirm(`Remover o filtro "${nome}"? Esta ação não pode ser desfeita.`)) return
+    setRemovendoId(id)
+    const { error } = await supabase.from('filtros_personalizados').delete().eq('id', id)
+    if (error) {
+      setMsg({ type: 'err', text: error.message })
+    } else {
+      setFiltros(prev => prev.filter(f => f.id !== id))
+    }
+    setRemovendoId(null)
+  }
+
+  async function toggleAtivo(f: FiltroPersonalizado) {
+    await supabase.from('filtros_personalizados').update({ ativo: !f.ativo }).eq('id', f.id)
+    setFiltros(prev => prev.map(x => x.id === f.id ? { ...x, ativo: !x.ativo } : x))
+  }
+
+  const porModulo: Record<string, FiltroPersonalizado[]> = {
+    trafego: filtros.filter(f => f.modulo === 'trafego'),
+    vendas:  filtros.filter(f => f.modulo === 'vendas'),
+  }
+
+  const labelModulo: Record<string, string> = {
+    trafego: 'Tráfego',
+    vendas:  'Vendas',
+  }
+
+  return (
+    <div className="space-y-6">
+
+      {msg && (
+        <div
+          className="px-4 py-3 rounded-lg text-sm flex items-center gap-2"
+          style={{
+            backgroundColor: msg.type === 'ok' ? '#0F2A1A' : '#2A0F0F',
+            color:            msg.type === 'ok' ? '#4ADE80' : '#F87171',
+            border:           `1px solid ${msg.type === 'ok' ? '#4ADE8033' : '#F8717133'}`,
+          }}
+        >
+          {msg.type === 'ok'
+            ? <CheckCircle className="w-4 h-4 shrink-0" />
+            : <XCircle     className="w-4 h-4 shrink-0" />
+          }
+          {msg.text}
+          <button onClick={() => setMsg(null)} className="ml-auto" style={{ color: 'inherit', opacity: 0.6 }}>
+            <XCircle className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {!formAberto && (
+        <div className="flex justify-end">
+          <button
+            onClick={abrirCriacao}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg"
+            style={{ backgroundColor: '#C9A84C', color: '#000000' }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A'}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C'}
+          >
+            <Plus className="w-4 h-4" />
+            Novo Filtro
+          </button>
+        </div>
+      )}
+
+      {formAberto && (
+        <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
+          <div className="px-5 py-4" style={{ borderBottom: '1px solid #1E1E1E' }}>
+            <p className="font-semibold" style={{ color: '#FFFFFF' }}>
+              {editando ? 'Editar filtro' : 'Novo filtro'}
+            </p>
+          </div>
+
+          <div className="px-5 py-4 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Nome do filtro</label>
+                <input
+                  type="text"
+                  value={formNome}
+                  onChange={e => setFormNome(e.target.value)}
+                  placeholder="Ex: Retargeting Brasil"
+                  style={{ ...inputStyle, width: '100%' }}
+                  onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                  onBlur={e => (e.target.style.borderColor = '#333333')}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Módulo</label>
+                <select
+                  value={formModulo}
+                  onChange={e => {
+                    const m = e.target.value as Modulo
+                    setFormModulo(m)
+                    setFormRegras([{ campo: CAMPOS_POR_MODULO[m][0].value, operador: 'contem', valor: '', ordem: 0 }])
+                  }}
+                  style={{ ...inputStyle, width: '100%' }}
+                  onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                  onBlur={e => (e.target.style.borderColor = '#333333')}
+                >
+                  <option value="trafego">Tráfego</option>
+                  <option value="vendas">Vendas</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Regras</p>
+
+              {formRegras.map((regra, idx) => (
+                <div key={idx} className="flex items-center gap-2 flex-wrap">
+                  <select
+                    value={regra.campo}
+                    onChange={e => atualizarRegra(idx, { campo: e.target.value })}
+                    style={{ ...inputStyle, flex: '1', minWidth: '160px' }}
+                    onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                    onBlur={e => (e.target.style.borderColor = '#333333')}
+                  >
+                    {CAMPOS_POR_MODULO[formModulo].map(c => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={regra.operador}
+                    onChange={e => atualizarRegra(idx, { operador: e.target.value as Operador })}
+                    style={{ ...inputStyle, width: '140px' }}
+                    onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                    onBlur={e => (e.target.style.borderColor = '#333333')}
+                  >
+                    {OPERADORES.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+
+                  <input
+                    type="text"
+                    value={regra.valor}
+                    onChange={e => atualizarRegra(idx, { valor: e.target.value })}
+                    placeholder="Valor..."
+                    style={{ ...inputStyle, flex: '1', minWidth: '140px' }}
+                    onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                    onBlur={e => (e.target.style.borderColor = '#333333')}
+                  />
+
+                  {formRegras.length > 1 && (
+                    <button
+                      onClick={() => removerRegra(idx)}
+                      className="p-1.5 rounded-lg shrink-0"
+                      style={{ color: '#888888' }}
+                      onMouseEnter={e => {
+                        (e.currentTarget as HTMLElement).style.color = '#F87171'
+                        ;(e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'
+                      }}
+                      onMouseLeave={e => {
+                        (e.currentTarget as HTMLElement).style.color = '#888888'
+                        ;(e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              <button
+                onClick={adicionarRegra}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
+                style={{ color: '#888888', border: '1px solid #333333', backgroundColor: 'transparent' }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'
+                  ;(e.currentTarget as HTMLElement).style.color = '#FFFFFF'
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
+                  ;(e.currentTarget as HTMLElement).style.color = '#888888'
+                }}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Adicionar regra
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={salvar}
+                disabled={salvando}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg disabled:opacity-50"
+                style={{ backgroundColor: '#C9A84C', color: '#000000' }}
+                onMouseEnter={e => { if (!salvando) (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A' }}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C'}
+              >
+                {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {editando ? 'Salvar alterações' : 'Criar filtro'}
+              </button>
+              <button
+                onClick={() => setFormAberto(false)}
+                className="px-4 py-2 text-sm rounded-lg"
+                style={{ border: '1px solid #333333', color: '#888888', backgroundColor: 'transparent' }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {carregando ? (
+        <div className="flex items-center justify-center py-12 gap-2" style={{ color: '#555555' }}>
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span className="text-sm">Carregando filtros...</span>
+        </div>
+      ) : filtros.length === 0 ? (
+        <div
+          className="rounded-xl border-dashed flex flex-col items-center justify-center py-16"
+          style={{ border: '1px dashed #222222' }}
+        >
+          <p className="text-sm" style={{ color: '#555555' }}>Nenhum filtro criado ainda.</p>
+          <p className="text-xs mt-1" style={{ color: '#444444' }}>Clique em &quot;Novo Filtro&quot; para começar.</p>
+        </div>
+      ) : (
+        Object.entries(porModulo).map(([mod, lista]) =>
+          lista.length === 0 ? null : (
+            <div key={mod} className="rounded-xl overflow-hidden" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
+              <div className="px-5 py-4" style={{ borderBottom: '1px solid #1E1E1E' }}>
+                <p className="font-semibold" style={{ color: '#FFFFFF' }}>{labelModulo[mod]}</p>
+                <p className="text-xs mt-0.5" style={{ color: '#555555' }}>{lista.length} filtro{lista.length !== 1 ? 's' : ''}</p>
+              </div>
+
+              <div>
+                {lista.map(f => (
+                  <div key={f.id} className="px-5 py-4" style={{ borderBottom: '1px solid #1A1A1A' }}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium" style={{ color: '#FFFFFF' }}>{f.nome}</p>
+                          {f.ativo
+                            ? <span className="px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: '#0F2A1A', color: '#4ADE80' }}>Ativo</span>
+                            : <span className="px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: '#1A1A1A', color: '#888888' }}>Inativo</span>
+                          }
+                        </div>
+
+                        <div className="mt-2 space-y-1">
+                          {f.regras.map((r, i) => {
+                            const campoLabel = CAMPOS_POR_MODULO[f.modulo as Modulo]?.find(c => c.value === r.campo)?.label ?? r.campo
+                            const opLabel    = OPERADORES.find(o => o.value === r.operador)?.label ?? r.operador
+                            return (
+                              <p key={i} className="text-xs" style={{ color: '#555555' }}>
+                                <span style={{ color: '#888888' }}>{campoLabel}</span>
+                                {' '}<span style={{ color: '#C9A84C' }}>{opLabel}</span>
+                                {' '}<span style={{ color: '#FFFFFF' }}>&quot;{r.valor}&quot;</span>
+                                {i < f.regras.length - 1 && <span style={{ color: '#444444' }}> + AND</span>}
+                              </p>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => abrirEdicao(f)}
+                          title="Editar"
+                          className="p-1.5 rounded-lg"
+                          style={{ color: '#888888' }}
+                          onMouseEnter={e => {
+                            (e.currentTarget as HTMLElement).style.color = '#C9A84C'
+                            ;(e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'
+                          }}
+                          onMouseLeave={e => {
+                            (e.currentTarget as HTMLElement).style.color = '#888888'
+                            ;(e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
+                          }}
+                        >
+                          <Save className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => toggleAtivo(f)}
+                          title={f.ativo ? 'Desativar' : 'Ativar'}
+                          className="p-1.5 rounded-lg"
+                          style={{ color: '#888888' }}
+                          onMouseEnter={e => {
+                            (e.currentTarget as HTMLElement).style.color = '#FB923C'
+                            ;(e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'
+                          }}
+                          onMouseLeave={e => {
+                            (e.currentTarget as HTMLElement).style.color = '#888888'
+                            ;(e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
+                          }}
+                        >
+                          {f.ativo ? <XCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => remover(f.id, f.nome)}
+                          disabled={removendoId === f.id}
+                          title="Remover"
+                          className="p-1.5 rounded-lg disabled:opacity-40"
+                          style={{ color: '#888888' }}
+                          onMouseEnter={e => {
+                            (e.currentTarget as HTMLElement).style.color = '#F87171'
+                            ;(e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'
+                          }}
+                          onMouseLeave={e => {
+                            (e.currentTarget as HTMLElement).style.color = '#888888'
+                            ;(e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
+                          }}
+                        >
+                          {removendoId === f.id
+                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                            : <Trash2  className="w-4 h-4" />
+                          }
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        )
+      )}
+    </div>
+  )
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function ConfiguracoesClient({ inicial, meuId }: { inicial: DadosConfiguracao; meuId: string }) {
@@ -2351,6 +2826,7 @@ export default function ConfiguracoesClient({ inicial, meuId }: { inicial: Dados
     { key: 'activecampaign', label: 'ActiveCampaign' },
     { key: 'sendflow',       label: 'Sendflow' },
     { key: 'usuarios',       label: 'Usuários' },
+    { key: 'filtros',        label: 'Filtros Personalizados' },
   ]
 
   return (
@@ -2451,6 +2927,10 @@ export default function ConfiguracoesClient({ inicial, meuId }: { inicial: Dados
 
       {aba === 'usuarios' && (
         <AbaUsuarios meuId={meuId} />
+      )}
+
+      {aba === 'filtros' && (
+        <AbaFiltrosPersonalizados />
       )}
     </div>
   )
