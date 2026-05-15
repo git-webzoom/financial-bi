@@ -114,6 +114,9 @@ Deno.serve(async () => {
 
       gruposFetched += grupos.length
 
+      // IDs que vieram da API agora
+      const idsAtivos = grupos.map(g => String(g.id ?? '')).filter(Boolean)
+
       // Atualiza nome e totais da campanha
       const totalMembros = grupos.reduce((s, g) => s + Number(g.participantsAmount ?? 0), 0)
       await supabase
@@ -153,6 +156,21 @@ Deno.serve(async () => {
           }, { onConflict: 'id' })
 
         if (!upsertErr) upserted++
+      }
+
+      // Remove do banco grupos que não existem mais na API
+      if (idsAtivos.length > 0) {
+        await supabase
+          .from('sendflow_grupos')
+          .delete()
+          .eq('campanha_id', camp.id)
+          .not('id', 'in', `(${idsAtivos.map(id => `"${id}"`).join(',')})`)
+      } else {
+        // API retornou 0 grupos — remove todos desta campanha
+        await supabase
+          .from('sendflow_grupos')
+          .delete()
+          .eq('campanha_id', camp.id)
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
