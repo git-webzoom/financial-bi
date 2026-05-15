@@ -76,13 +76,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 400 })
   }
 
-  // Cria o perfil
-  const { error: profileError } = await admin.from('profiles').insert({
-    id:     authData.user.id,
+  // Atualiza o perfil criado automaticamente pelo trigger trg_auth_user_created
+  const { error: profileError } = await admin.from('profiles').update({
     nome:   nome.trim(),
     perfil: perfil,
     ativo:  true,
-  })
+  }).eq('id', authData.user.id)
 
   if (profileError) {
     // Rollback: remove o usuário do auth se o perfil falhou
