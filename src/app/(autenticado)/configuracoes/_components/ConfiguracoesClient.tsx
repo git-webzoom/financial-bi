@@ -645,6 +645,7 @@ function AbaMetaAds({
       setSyncAllMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro ao sincronizar.' })
     } finally {
       setSyncingAll(false)
+    }
   }
 
   return (
