@@ -35,10 +35,10 @@ function dailyRange(): { date_start: string; date_end: string } {
 
 function weeklyRange(): { date_start: string; date_end: string } {
   const now = new Date()
-  // 7 dias: hoje até 6 dias atrás — varredura completa para garantir consistência
+  // 8 dias: hoje até 7 dias atrás — garante sobreposição com o sync diário
   const today = new Date(now)
-  const d7 = new Date(today); d7.setDate(today.getDate() - 6)
-  return { date_start: dateStr(d7), date_end: dateStr(today) }
+  const d8 = new Date(today); d8.setDate(today.getDate() - 7)
+  return { date_start: dateStr(d8), date_end: dateStr(today) }
 }
 
 async function checkRateLimit(resp: Response) {

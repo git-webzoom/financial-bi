@@ -627,7 +627,7 @@ function AbaMetaAds({
       const erros = json.records_error ?? 0
       setSyncAllMsg({
         type: erros > 0 ? 'err' : 'ok',
-        text: `Sync 7 dias concluído — ${json.records_fetched ?? 0} registros buscados, ${json.records_inserted ?? 0} inseridos${erros > 0 ? `, ${erros} erros` : ''}.`,
+        text: `Sync 8 dias concluído — ${json.records_fetched ?? 0} registros buscados, ${json.records_inserted ?? 0} inseridos${erros > 0 ? `, ${erros} erros` : ''}.`,
       })
       onRefresh()
     } catch (e: unknown) {
@@ -791,7 +791,7 @@ function AbaMetaAds({
             >
               {syncingWeekly
                 ? <><Loader2 className="w-4 h-4 animate-spin" />Sincronizando…</>
-                : <><RefreshCw className="w-4 h-4" />Sync 7 dias</>
+                : <><RefreshCw className="w-4 h-4" />Sync 8 dias</>
               }
             </button>
             <button
@@ -805,7 +805,7 @@ function AbaMetaAds({
             >
               {syncingAll
                 ? <><Loader2 className="w-4 h-4 animate-spin" />Sincronizando…</>
-                : <><RefreshCw className="w-4 h-4" />Sync Geral</>
+                : <><RefreshCw className="w-4 h-4" />Sync 2 dias</>
               }
             </button>
           </div>
