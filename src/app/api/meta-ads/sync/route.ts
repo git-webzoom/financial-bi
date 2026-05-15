@@ -18,7 +18,8 @@ export async function POST(req: NextRequest) {
   if (account_id) payload.account_id = account_id
   if (mode)       payload.mode       = mode
 
-  const res = await fetch(
+  // Fire-and-forget: não aguarda a edge function terminar para evitar timeout da Vercel (60s)
+  fetch(
     `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/job-meta-ads`,
     {
       method: 'POST',
@@ -28,13 +29,7 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify(payload),
     }
-  )
+  ).catch(() => { /* erro será registrado no integration_job_runs pela edge function */ })
 
-  const data = await res.json().catch(() => ({}))
-
-  if (!res.ok) {
-    return NextResponse.json({ error: data.error ?? 'Erro ao sincronizar' }, { status: res.status })
-  }
-
-  return NextResponse.json(data)
+  return NextResponse.json({ ok: true, message: 'Sync iniciado. Acompanhe o progresso em Configurações → Integrações.' })
 }

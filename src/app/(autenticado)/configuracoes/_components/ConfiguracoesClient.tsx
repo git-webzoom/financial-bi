@@ -619,18 +619,7 @@ function AbaMetaAds({
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Erro desconhecido')
-
-      const { data } = await supabase
-        .from('meta_ad_accounts')
-        .select('id, account_id, nome, ativo, last_sync_at, last_sync_status')
-        .order('nome')
-      if (data) setAccounts(data)
-
-      const erros = json.records_error ?? 0
-      setSyncAllMsg({
-        type: erros > 0 ? 'err' : 'ok',
-        text: `Sync 8 dias concluído — ${json.records_fetched ?? 0} registros buscados, ${json.records_inserted ?? 0} inseridos${erros > 0 ? `, ${erros} erros` : ''}.`,
-      })
+      setSyncAllMsg({ type: 'ok', text: json.message ?? 'Sync iniciado em background.' })
       onRefresh()
     } catch (e: unknown) {
       setSyncAllMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro ao sincronizar.' })
@@ -650,24 +639,12 @@ function AbaMetaAds({
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Erro desconhecido')
-
-      const { data } = await supabase
-        .from('meta_ad_accounts')
-        .select('id, account_id, nome, ativo, last_sync_at, last_sync_status')
-        .order('nome')
-      if (data) setAccounts(data)
-
-      const erros = json.records_error ?? 0
-      setSyncAllMsg({
-        type: erros > 0 ? 'err' : 'ok',
-        text: `Concluído — ${json.records_fetched ?? 0} registros buscados, ${json.records_inserted ?? 0} inseridos${erros > 0 ? `, ${erros} erros` : ''}.`,
-      })
+      setSyncAllMsg({ type: 'ok', text: json.message ?? 'Sync iniciado em background.' })
       onRefresh()
     } catch (e: unknown) {
       setSyncAllMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro ao sincronizar.' })
     } finally {
       setSyncingAll(false)
-    }
   }
 
   return (
@@ -1932,7 +1909,7 @@ function AbaConfigSendflow({
         <div className="px-5 py-4" style={{ borderBottom: '1px solid #1E1E1E' }}>
           <p className="font-semibold" style={{ color: '#FFFFFF' }}>Sincronização Manual</p>
           <p className="text-xs mt-0.5" style={{ color: '#888888' }}>
-            Campanhas/grupos sincronizam automaticamente a cada 1h · Métricas a cada 15min
+            Campanhas/grupos sincronizam automaticamente a cada 1h
           </p>
         </div>
 
@@ -1964,34 +1941,6 @@ function AbaConfigSendflow({
             </button>
           </div>
 
-          <div style={{ borderTop: '1px solid #1E1E1E' }} />
-
-          {/* Métricas */}
-          <div className="flex items-center gap-3">
-            <div className="flex-1">
-              <p className="text-sm font-medium" style={{ color: '#FFFFFF' }}>Métricas</p>
-              <p className="text-xs mt-0.5" style={{ color: '#555555' }}>Busca adicionados, removidos e cliques dos últimos 7 dias</p>
-              {syncMetricasMsg && (
-                <p className="text-xs mt-1" style={{ color: syncMetricasMsg.type === 'ok' ? '#4ADE80' : '#F87171' }}>
-                  {syncMetricasMsg.text}
-                </p>
-              )}
-            </div>
-            <button
-              onClick={sincronizarMetricas}
-              disabled={syncingMetricas || !token?.ativo}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shrink-0"
-              style={{ backgroundColor: '#C9A84C', color: '#000000' }}
-              onMouseEnter={e => { if (!syncingMetricas && token?.ativo) (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A' }}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C'}
-              title={!token?.ativo ? 'Configure o token primeiro' : 'Sincronizar métricas agora'}
-            >
-              {syncingMetricas
-                ? <><Loader2 className="w-4 h-4 animate-spin" />Sincronizando…</>
-                : <><RefreshCw className="w-4 h-4" />Sync Métricas</>
-              }
-            </button>
-          </div>
         </div>
       </div>
 
