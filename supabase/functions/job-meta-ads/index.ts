@@ -14,7 +14,7 @@ const META_FIELDS = [
   'campaign_id', 'campaign_name',
   'date_start', 'date_stop',
   'impressions', 'reach', 'frequency', 'spend',
-  'clicks',
+  'inline_link_clicks',
   'actions',
   'video_p25_watched_actions', 'video_p50_watched_actions',
   'video_p75_watched_actions', 'video_p95_watched_actions',
