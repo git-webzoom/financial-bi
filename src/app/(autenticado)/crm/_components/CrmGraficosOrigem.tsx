@@ -22,6 +22,7 @@ function agrupar(inscritos: InscritoCrm[], campo: keyof InscritoCrm, top: number
   return Object.entries(map)
     .sort((a, b) => b[1] - a[1])
     .slice(0, top)
+    .reverse()
     .map(([nome, count]) => ({
       nome: nome.length > 30 ? nome.slice(0, 28) + '…' : nome,
       nomeCompleto: nome,
