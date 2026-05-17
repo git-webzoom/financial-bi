@@ -1,4 +1,4 @@
-export type Operador = 'contem' | 'nao_contem' | 'igual' | 'comeca_com'
+export type Operador = 'contem' | 'nao_contem' | 'igual' | 'comeca_com' | 'maior_que' | 'menor_que'
 export type Modulo   = 'trafego' | 'vendas'
 
 export interface RegraFiltro {
@@ -32,8 +32,9 @@ export const CAMPOS_POR_MODULO: Record<Modulo, { value: string; label: string }[
     { value: 'status',       label: 'Status'           },
     { value: 'pagamento',    label: 'Pagamento'        },
     { value: 'marketplace',  label: 'Marketplace'      },
-    { value: 'utm_source',   label: 'UTM Source'       },
-    { value: 'utm_campaign', label: 'UTM Campaign'     },
+    { value: 'utm_source',       label: 'UTM Source'       },
+    { value: 'utm_campaign',     label: 'UTM Campaign'     },
+    { value: 'assinatura_ciclo', label: 'Ciclo'            },
   ],
 }
 
@@ -42,4 +43,6 @@ export const OPERADORES: { value: Operador; label: string }[] = [
   { value: 'nao_contem', label: 'não contém' },
   { value: 'igual',      label: 'igual a'    },
   { value: 'comeca_com', label: 'começa com' },
+  { value: 'maior_que',  label: 'maior que'  },
+  { value: 'menor_que',  label: 'menor que'  },
 ]
