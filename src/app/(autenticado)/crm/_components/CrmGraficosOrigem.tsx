@@ -100,7 +100,7 @@ function GraficoBarras({
 
 export default function CrmGraficosOrigem({ inscritos, carregando, sourceAtivo, campaignAtivo, onSource, onCampaign }: Props) {
   const sources   = agrupar(inscritos, 'utm_source', 10)
-  const campaigns = agrupar(inscritos, 'utm_campaign', 5)
+  const campaigns = agrupar(inscritos, 'utm_campaign', 10)
 
   if (carregando) {
     return (
@@ -126,7 +126,7 @@ export default function CrmGraficosOrigem({ inscritos, carregando, sourceAtivo, 
       <div className="lg:col-span-2">
         <GraficoBarras
           dados={campaigns}
-          titulo="Top 5 — utm_campaign"
+          titulo="Top 10 — utm_campaign"
           ativo={campaignAtivo}
           onClick={onCampaign}
           altura={Math.max(campaigns.length * 28, 80)}
