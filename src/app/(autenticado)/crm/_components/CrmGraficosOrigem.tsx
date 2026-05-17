@@ -22,8 +22,8 @@ function agrupar(inscritos: InscritoCrm[], campo: keyof InscritoCrm, top: number
   return Object.entries(map)
     .sort((a, b) => b[1] - a[1])
     .slice(0, top)
-    .map(([nome, count]) => ({
-      nome: nome.length > 30 ? nome.slice(0, 28) + '…' : nome,
+    .map(([nome, count], idx) => ({
+      nome: `${idx + 1}. ${nome.length > 22 ? nome.slice(0, 20) + '…' : nome}`,
       nomeCompleto: nome,
       count,
       pct: total > 0 ? (count / total * 100).toFixed(1) : '0',
@@ -72,13 +72,9 @@ function GraficoBarras({
           <XAxis type="number" hide />
           <YAxis
             type="category"
-            dataKey="nomeCompleto"
-            width={120}
-            tick={({ x, y, payload }) => (
-              <text x={x} y={y} fill="#888888" fontSize={11} textAnchor="end" dominantBaseline="middle">
-                {payload.value.length > 18 ? payload.value.slice(0, 16) + '…' : payload.value}
-              </text>
-            )}
+            dataKey="nome"
+            width={130}
+            tick={{ fill: '#888888', fontSize: 11 }}
             tickLine={false}
             axisLine={false}
           />
