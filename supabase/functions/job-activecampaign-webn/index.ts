@@ -169,15 +169,45 @@ async function processarLote(
       })
       if (e1) throw new Error(`upsert_contato: ${e1.message}`)
 
-      const { data: crmData, error: e2 } = await supabase
+      // Separa UTMs dos campos de engajamento — UTMs só entram na primeira vez
+      const { utm_source, utm_campaign, utm_medium, utm_content, utm_term, utm_id, ...camposEngajamento } = campos
+
+      const { data: crmExistente } = await supabase
         .from('crm')
-        .upsert({
-          contato_id: contatoId as string, ac_contact_id: String(ac.id),
-          email, nome, telefone: ac.phone || null,
-          ...campos, updated_at: new Date().toISOString(),
-        }, { onConflict: 'ac_contact_id' })
-        .select('id').single()
-      if (e2) throw new Error(`crm: ${e2.message}`)
+        .select('id')
+        .eq('ac_contact_id', String(ac.id))
+        .maybeSingle()
+
+      let crmId: string
+
+      if (!crmExistente) {
+        // Contato novo: insere com UTMs de captação
+        const { data: crmData, error: e2 } = await supabase
+          .from('crm')
+          .insert({
+            contato_id: contatoId as string, ac_contact_id: String(ac.id),
+            email, nome, telefone: ac.phone || null,
+            utm_source, utm_campaign, utm_medium, utm_content, utm_term, utm_id,
+            ...camposEngajamento, updated_at: new Date().toISOString(),
+          })
+          .select('id').single()
+        if (e2) throw new Error(`crm insert: ${e2.message}`)
+        crmId = crmData!.id as string
+      } else {
+        // Contato existente: atualiza apenas engajamento, preserva UTMs originais
+        const { error: e2 } = await supabase
+          .from('crm')
+          .update({
+            contato_id: contatoId as string,
+            email, nome, telefone: ac.phone || null,
+            ...camposEngajamento, updated_at: new Date().toISOString(),
+          })
+          .eq('ac_contact_id', String(ac.id))
+        if (e2) throw new Error(`crm update: ${e2.message}`)
+        crmId = crmExistente.id as string
+      }
+
+      const crmData = { id: crmId }
 
       // Upsert via RPC: insere com UTMs na primeira vez, atualiza UTMs apenas se ainda NULL
       // Garante que UTMs de tráfego (captação) nunca são sobrescritas por UTMs de venda
