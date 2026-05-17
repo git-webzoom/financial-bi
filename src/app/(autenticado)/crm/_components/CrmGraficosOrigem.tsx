@@ -22,7 +22,6 @@ function agrupar(inscritos: InscritoCrm[], campo: keyof InscritoCrm, top: number
   return Object.entries(map)
     .sort((a, b) => b[1] - a[1])
     .slice(0, top)
-    .reverse()
     .map(([nome, count]) => ({
       nome: nome.length > 30 ? nome.slice(0, 28) + '…' : nome,
       nomeCompleto: nome,
@@ -73,17 +72,21 @@ function GraficoBarras({
           <XAxis type="number" hide />
           <YAxis
             type="category"
-            dataKey="nome"
+            dataKey="nomeCompleto"
             width={120}
-            tick={{ fill: '#888888', fontSize: 11 }}
+            tick={({ x, y, payload }) => (
+              <text x={x} y={y} fill="#888888" fontSize={11} textAnchor="end" dominantBaseline="middle">
+                {payload.value.length > 18 ? payload.value.slice(0, 16) + '…' : payload.value}
+              </text>
+            )}
             tickLine={false}
             axisLine={false}
           />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1A1A1A' }} />
           <Bar dataKey="count" radius={[0, 4, 4, 0]} onClick={(d) => onClick((d as unknown as { nomeCompleto: string }).nomeCompleto)} style={{ cursor: 'pointer' }}>
-            {dados.map((entry) => (
+            {dados.map((entry, idx) => (
               <Cell
-                key={entry.nomeCompleto}
+                key={`${idx}-${entry.nomeCompleto}`}
                 fill={ativo === null || ativo === entry.nomeCompleto ? '#C9A84C' : '#3A2E10'}
               />
             ))}
