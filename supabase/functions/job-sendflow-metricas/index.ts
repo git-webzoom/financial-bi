@@ -14,13 +14,33 @@ function json(data: unknown, status = 200): Response {
   })
 }
 
+function dateStr(d: Date): string {
+  return d.toISOString().split('T')[0]
+}
+
+// Retorna ["YYYY-MM-DD"] com apenas hoje
+function dailyDates(): string[] {
+  return [dateStr(new Date())]
+}
+
+// Retorna os últimos N dias inclusive hoje: ["YYYY-MM-DD", ...]
+function lookbackDates(days = 5): string[] {
+  const result: string[] = []
+  const now = new Date()
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(now.getDate() - i)
+    result.push(dateStr(d))
+  }
+  return result
+}
+
 // Converte "DDMMYYYY" → "YYYY-MM-DD"
 function parseSendflowDate(raw: string): string | null {
   if (raw.length !== 8) return null
   const dd = raw.slice(0, 2)
   const mm = raw.slice(2, 4)
   const yyyy = raw.slice(4, 8)
-  // Valida minimamente
   if (isNaN(Number(dd)) || isNaN(Number(mm)) || isNaN(Number(yyyy))) return null
   return `${yyyy}-${mm}-${dd}`
 }
@@ -66,7 +86,13 @@ function delay(ms: number) {
   return new Promise(r => setTimeout(r, ms))
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
+  const body = await req.json().catch(() => ({})) as { mode?: string; days?: number }
+  const mode = body.mode === 'lookback' ? 'lookback' : 'daily'
+  const days = (mode === 'lookback' && body.days && body.days > 0) ? body.days : 5
+
+  const targetDates = new Set(mode === 'lookback' ? lookbackDates(days) : dailyDates())
+
   const token = await getToken()
   if (!token) {
     await registrarJobRun('error', 0, 0, 'Token Sendflow não configurado ou inativo')
@@ -75,15 +101,14 @@ Deno.serve(async () => {
 
   const headers = { Authorization: `Bearer ${token}` }
 
-  // Buscar apenas campanhas ativas
   const { data: campanhas } = await supabase
     .from('sendflow_campanhas')
     .select('id')
-    .eq('monitorada', true)
+    .eq('coletar_metricas', true)
 
   if (!campanhas?.length) {
     await registrarJobRun('success', 0, 0)
-    return json({ ok: true, message: 'Nenhuma campanha ativa' })
+    return json({ ok: true, message: 'Nenhuma campanha com coleta de métricas ativa' })
   }
 
   let totalFetched = 0
@@ -108,7 +133,6 @@ Deno.serve(async () => {
         continue
       }
 
-      // Estrutura: { add: {total, dates: {"DDMMYYYY": N}}, remove: {total, dates}, clicks: {total, dates} }
       const analytics = await res.json() as {
         add?:    { total?: number; dates?: Record<string, number> }
         remove?: { total?: number; dates?: Record<string, number> }
@@ -119,18 +143,19 @@ Deno.serve(async () => {
       const removeDates = analytics.remove?.dates ?? {}
       const clicksDates = analytics.clicks?.dates ?? {}
 
-      // União de todas as datas
-      const todasDatasArr = Array.from(new Set([
+      // Une todas as datas retornadas pela API e filtra pelo range desejado
+      const todasDatas = Array.from(new Set([
         ...Object.keys(addDates),
         ...Object.keys(removeDates),
         ...Object.keys(clicksDates),
       ]))
 
-      totalFetched += todasDatasArr.length
-
-      for (const rawDate of todasDatasArr) {
+      for (const rawDate of todasDatas) {
         const data = parseSendflowDate(rawDate)
         if (!data) continue
+        if (!targetDates.has(data)) continue  // ignora datas fora do range
+
+        totalFetched++
 
         const { error: upsertErr } = await supabase
           .from('sendflow_metricas')
@@ -144,6 +169,7 @@ Deno.serve(async () => {
           }, { onConflict: 'campanha_id,data' })
 
         if (!upsertErr) totalUpserted++
+        else erros.push(`campanha ${camp.id} data ${data}: ${upsertErr.message}`)
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -152,16 +178,17 @@ Deno.serve(async () => {
   }
 
   const status = erros.length > 0 && totalUpserted === 0 ? 'error' : 'success'
-  const errorMessage = erros.length ? erros.slice(0, 3).join('; ') : undefined
-  await registrarJobRun(status, totalFetched, totalUpserted, errorMessage)
+  await registrarJobRun(status, totalFetched, totalUpserted, erros.length ? erros.slice(0, 3).join('; ') : undefined)
 
-  // Atualiza KPIs das últimas 2 semanas na tabela grupos_kpis_semana
+  // Recalcula KPIs das semanas afetadas pelo range processado
   const { data: semanaAtual } = await supabase.rpc('get_semana_atual')
   if (semanaAtual) {
     await supabase.rpc('upsert_grupos_kpis_semana', { p_numero: semanaAtual })
-    await supabase.rpc('upsert_grupos_kpis_semana', { p_numero: semanaAtual - 1 })
+    if (mode === 'lookback') {
+      await supabase.rpc('upsert_grupos_kpis_semana', { p_numero: semanaAtual - 1 })
+    }
   }
 
-  console.log(`Concluído: ${totalUpserted}/${totalFetched} registros, ${erros.length} erros`)
-  return json({ ok: true, fetched: totalFetched, upserted: totalUpserted, erros })
+  console.log(`[${mode}] Concluído: ${totalUpserted}/${totalFetched} registros, ${erros.length} erros`)
+  return json({ ok: true, mode, fetched: totalFetched, upserted: totalUpserted, erros })
 })

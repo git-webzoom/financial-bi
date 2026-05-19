@@ -84,6 +84,28 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, id: id.trim(), nome, ativo })
 }
 
+// PATCH /api/sendflow/campanha — update coletar_metricas flag
+export async function PATCH(req: NextRequest) {
+  const user = await verificarAdmin()
+  if (!user) return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+
+  const { id, coletar_metricas } = await req.json()
+  if (!id?.trim() || typeof coletar_metricas !== 'boolean') {
+    return NextResponse.json({ error: 'id e coletar_metricas são obrigatórios' }, { status: 400 })
+  }
+
+  const admin = adminClient()
+
+  const { error } = await admin
+    .from('sendflow_campanhas')
+    .update({ coletar_metricas })
+    .eq('id', id.trim())
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  return NextResponse.json({ ok: true })
+}
+
 // DELETE /api/sendflow/campanha — unmonitor campaign (sets monitorada = false)
 export async function DELETE(req: NextRequest) {
   const user = await verificarAdmin()

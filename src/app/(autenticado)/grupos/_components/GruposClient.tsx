@@ -199,7 +199,7 @@ export default function GruposClient({ campanhasIniciais, kpisGrupo, semanaAtual
         <div>
           <h2 className="text-base font-bold" style={{ color: '#FFFFFF' }}>Grupos Captação Webnário</h2>
           <p className="text-xs mt-0.5" style={{ color: '#555555' }}>
-            Atualizado em tempo real via webhook Sendflow
+            Atualizado via API Sendflow · a cada 15 minutos
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -232,16 +232,11 @@ export default function GruposClient({ campanhasIniciais, kpisGrupo, semanaAtual
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4" style={{ maxWidth: '320px' }}>
         <KpiCard
-          label={`Entraram no grupo · Semana ${semana}`}
-          valor={kpisGrupo.adicionados.toLocaleString('pt-BR')}
-          sub="entradas na semana (pode ter re-entradas)"
-        />
-        <KpiCard
-          label={`No grupo agora · Semana ${semana}`}
+          label={semana === semanaAtual ? 'No grupo agora' : `No grupo · Semana ${semana}`}
           valor={kpisGrupo.no_grupo_agora.toLocaleString('pt-BR')}
-          sub="entradas menos saídas na semana"
+          sub={semana === semanaAtual ? 'total atual de membros nas campanhas ativas' : 'total de membros ao final da semana'}
         />
       </div>
 

@@ -30,6 +30,7 @@ export interface GruposKpisSemana {
   adicionados: number
   removidos: number
   no_grupo_agora: number
+  membros_inicio_semana: number
 }
 
 export default async function GruposPage({
@@ -49,7 +50,7 @@ export default async function GruposPage({
   ] = await Promise.all([
     supabase.from('sendflow_campanhas').select('id, nome, total_grupos, total_membros, ativo, synced_at, created_at').order('created_at', { ascending: false }),
     supabase.rpc('get_semana_atual'),
-    supabase.from('grupos_kpis_semana').select('numero_semana, adicionados, removidos, no_grupo_agora').order('numero_semana', { ascending: false }),
+    supabase.from('grupos_kpis_semana').select('numero_semana, adicionados, removidos, no_grupo_agora, membros_inicio_semana').order('numero_semana', { ascending: false }),
   ])
 
   const semanaDefault = semanaAtual as number ?? 172
@@ -57,7 +58,7 @@ export default async function GruposPage({
   const semanaNum = semanaParam && !isNaN(semanaParam) ? semanaParam : semanaDefault
 
   const kpis: GruposKpisSemana[] = kpisRaw ?? []
-  const kpiSemana = kpis.find(k => k.numero_semana === semanaNum) ?? { numero_semana: semanaNum, adicionados: 0, removidos: 0, no_grupo_agora: 0 }
+  const kpiSemana = kpis.find(k => k.numero_semana === semanaNum) ?? { numero_semana: semanaNum, adicionados: 0, removidos: 0, no_grupo_agora: 0, membros_inicio_semana: 0 }
 
   const campanhas: SendflowCampanha[] = campanhasRaw ?? []
 

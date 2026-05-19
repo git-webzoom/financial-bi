@@ -1666,6 +1666,7 @@ interface SendflowCampanha {
   total_membros: number
   ativo: boolean
   monitorada: boolean
+  coletar_metricas: boolean
   synced_at: string | null
 }
 
@@ -1707,7 +1708,7 @@ function AbaConfigSendflow({
   function carregarCampanhas() {
     supabase
       .from('sendflow_campanhas')
-      .select('id, nome, total_grupos, total_membros, ativo, monitorada, synced_at')
+      .select('id, nome, total_grupos, total_membros, ativo, monitorada, coletar_metricas, synced_at')
       .eq('monitorada', true)
       .order('created_at', { ascending: false })
       .then(({ data }) => setCampanhas(data ?? []))
@@ -1800,6 +1801,21 @@ function AbaConfigSendflow({
       setAddMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro ao adicionar.' })
     } finally {
       setAdicionando(false)
+    }
+  }
+
+  async function toggleColetarMetricas(id: string, valor: boolean) {
+    setCampanhas(prev => prev.map(c => c.id === id ? { ...c, coletar_metricas: valor } : c))
+    try {
+      const res = await fetch('/api/sendflow/campanha', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, coletar_metricas: valor }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error)
+    } catch (e: unknown) {
+      console.error('Erro ao atualizar coletar_metricas:', e)
+      setCampanhas(prev => prev.map(c => c.id === id ? { ...c, coletar_metricas: !valor } : c))
     }
   }
 
@@ -1940,6 +1956,33 @@ function AbaConfigSendflow({
             </button>
           </div>
 
+          {/* Métricas */}
+          <div className="flex items-center gap-3" style={{ borderTop: '1px solid #1E1E1E', paddingTop: '1rem' }}>
+            <div className="flex-1">
+              <p className="text-sm font-medium" style={{ color: '#FFFFFF' }}>Métricas (entradas/saídas)</p>
+              <p className="text-xs mt-0.5" style={{ color: '#555555' }}>Busca dados de hoje nas campanhas com coleta ativa</p>
+              {syncMetricasMsg && (
+                <p className="text-xs mt-1" style={{ color: syncMetricasMsg.type === 'ok' ? '#4ADE80' : '#F87171' }}>
+                  {syncMetricasMsg.text}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={sincronizarMetricas}
+              disabled={syncingMetricas || !token?.ativo}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shrink-0"
+              style={{ backgroundColor: '#C9A84C', color: '#000000' }}
+              onMouseEnter={e => { if (!syncingMetricas && token?.ativo) (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A' }}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C'}
+              title={!token?.ativo ? 'Configure o token primeiro' : 'Sincronizar métricas agora'}
+            >
+              {syncingMetricas
+                ? <><Loader2 className="w-4 h-4 animate-spin" />Sincronizando…</>
+                : <><RefreshCw className="w-4 h-4" />Sync Métricas</>
+              }
+            </button>
+          </div>
+
         </div>
       </div>
 
@@ -2012,6 +2055,19 @@ function AbaConfigSendflow({
                     {c.synced_at ? ` · sync ${formatData(c.synced_at)}` : ''}
                   </p>
                 </div>
+                {/* Toggle coletar métricas */}
+                <button
+                  onClick={() => toggleColetarMetricas(c.id, !c.coletar_metricas)}
+                  className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
+                  style={{
+                    backgroundColor: c.coletar_metricas ? '#0F2A1A' : '#1A1A1A',
+                    color: c.coletar_metricas ? '#4ADE80' : '#555555',
+                    border: `1px solid ${c.coletar_metricas ? '#166534' : '#333333'}`,
+                  }}
+                  title={c.coletar_metricas ? 'Coleta de métricas ativa — clique para desativar' : 'Clique para ativar coleta de métricas'}
+                >
+                  {c.coletar_metricas ? '● Métricas' : '○ Métricas'}
+                </button>
                 <button
                   onClick={() => removerCampanha(c.id)}
                   disabled={removendo === c.id}
