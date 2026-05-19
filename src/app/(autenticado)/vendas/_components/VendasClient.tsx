@@ -430,25 +430,43 @@ export default function VendasClient({
       setTotal(count ?? 0)
 
       if (!params.emails?.length) {
-        const { data: kdata } = await supabase.rpc('get_kpis_vendas', {
-          p_inicio:      inicio,
-          p_fim:         fim,
-          p_produto_id:  params.produtoId  || null,
-          p_marketplace: params.marketplace || null,
-        })
+        // Se há filtro personalizado ativo, busca todas as vendas filtradas para calcular KPIs localmente
+        if (filtroPersonalizadoRef.current?.regras?.length) {
+          let qAll = supabase
+            .from('vendas')
+            .select('*')
+            .gte('data_pedido', inicio)
+            .lte('data_pedido', fim)
 
-        const k = kdata ?? {}
-        const bruto   = k.faturamentoBruto  ?? 0
-        const nVendas = k.totalVendas       ?? 0
+          if (params.produtoId)   qAll = qAll.eq('produto_id', params.produtoId)
+          if (params.status)      qAll = qAll.eq('status', params.status)
+          if (params.pagamento)   qAll = qAll.ilike('pagamento', `%${params.pagamento}%`)
+          if (params.marketplace) qAll = qAll.eq('marketplace', params.marketplace)
+          qAll = aplicarRegras(qAll, filtroPersonalizadoRef.current.regras)
 
-        setKpis({
-          faturamentoBruto:   bruto,
-          faturamentoLiquido: k.faturamentoLiquido ?? 0,
-          totalVendas:        nVendas,
-          ticketMedio:        nVendas > 0 ? bruto / nVendas : 0,
-          reembolsos:         k.reembolsos  ?? 0,
-          chargebacks:        k.chargebacks ?? 0,
-        })
+          const { data: todas } = await qAll
+          calcularKpisLocais((todas as Venda[]) ?? [])
+        } else {
+          const { data: kdata } = await supabase.rpc('get_kpis_vendas', {
+            p_inicio:      inicio,
+            p_fim:         fim,
+            p_produto_id:  params.produtoId  || null,
+            p_marketplace: params.marketplace || null,
+          })
+
+          const k = kdata ?? {}
+          const bruto   = k.faturamentoBruto  ?? 0
+          const nVendas = k.totalVendas       ?? 0
+
+          setKpis({
+            faturamentoBruto:   bruto,
+            faturamentoLiquido: k.faturamentoLiquido ?? 0,
+            totalVendas:        nVendas,
+            ticketMedio:        nVendas > 0 ? bruto / nVendas : 0,
+            reembolsos:         k.reembolsos  ?? 0,
+            chargebacks:        k.chargebacks ?? 0,
+          })
+        }
       }
     })
   }, [supabase])
