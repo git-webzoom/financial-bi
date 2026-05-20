@@ -36,15 +36,13 @@ async function buscarDadosSemana(
   const [{ data: periodoRaw }, { data: presencasRaw }, { data: comprasRaw }] = await Promise.all([
     supabase.rpc('get_periodo_semana', { p_numero: numeroSemana }),
     supabase
-      .from('webinario_inscritos')
+      .from('webinario_presencas')
       .select(`
         id, contato_id, numero_semana,
         data_acesso, viu_pitch, data_pitch,
-        crm:crm_id ( email, nome, telefone ),
         contato:contato_id ( email, nome, telefone )
       `)
       .eq('numero_semana', numeroSemana)
-      .not('data_acesso', 'is', null)
       .order('data_acesso', { ascending: false }),
     supabase.rpc('get_compradores_semana', { p_numero: numeroSemana }),
   ])
@@ -59,16 +57,14 @@ async function buscarDadosSemana(
   }
 
   const presencas: PresencaWebn[] = lista.map((i) => {
-    const crm = (i.crm as unknown as Record<string, unknown>) ?? {}
     const contato = (i.contato as unknown as Record<string, unknown>) ?? {}
-    const fonte = Object.keys(crm).length > 0 ? crm : contato
     return {
       id: i.id as string,
       contato_id: i.contato_id as string ?? '',
       numero_semana: i.numero_semana as number,
-      email: fonte.email as string ?? '',
-      nome: fonte.nome as string ?? null,
-      telefone: fonte.telefone as string ?? null,
+      email: contato.email as string ?? '',
+      nome: contato.nome as string ?? null,
+      telefone: contato.telefone as string ?? null,
       data_acesso: i.data_acesso as string ?? null,
       viu_pitch: i.viu_pitch as boolean ?? false,
       data_pitch: i.data_pitch as string ?? null,
