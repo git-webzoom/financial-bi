@@ -246,7 +246,7 @@ async function processarSemana(
   let totalFetched = 0, totalInserted = 0, totalErrors = 0
 
   try {
-    await supabase.rpc('ensure_semana_existe', { p_numero: semana })
+    await supabase.rpc('ensure_semana_webnario_existe', { p_numero: semana })
 
     const tagInfo = await buscarTag(baseUrl, token, semana)
     if (!tagInfo) {

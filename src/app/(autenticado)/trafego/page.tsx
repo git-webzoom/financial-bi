@@ -28,6 +28,10 @@ export default async function TrafegoPage({
   const pagina   = Number(searchParams.pagina ?? '0')
   const PAGE_SIZE = 25
 
+  // Últimas 4 semanas para o seletor de semana (datas em BRT)
+  const { data: semanasRaw } = await supabase.rpc('listar_semanas_recentes', { p_limit: 4, p_offset: 0 })
+  const semanas: { numero: number; inicio: string; fim: string }[] = semanasRaw ?? []
+
   // Contas de anúncio para o filtro
   const { data: metaAccounts } = await supabase
     .from('meta_ad_accounts')
@@ -144,6 +148,7 @@ export default async function TrafegoPage({
       }}
       filtrosDefault={{ inicio, fim, conta, campanha, adset, pagina }}
       pageSize={PAGE_SIZE}
+      semanas={semanas}
     />
   )
 }

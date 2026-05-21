@@ -15,14 +15,15 @@ export default async function WebnarioPage({
   const { data: semanaAtual } = await supabase.rpc('get_semana_webnario_ativa')
   let semanaDefault = semanaAtual as number | null
   if (!semanaDefault) {
-    // Fora da janela do evento ao vivo: usa a semana mais recente como fallback
+    // Fora da janela ativa: mostra a última semana já encerrada (data_fim < now)
     const { data: ultimaSemana } = await supabase
       .from('webinario_semanas')
       .select('numero')
+      .lt('data_fim', new Date().toISOString())
       .order('numero', { ascending: false })
       .limit(1)
       .single()
-    semanaDefault = (ultimaSemana?.numero as number) ?? 172
+    semanaDefault = (ultimaSemana?.numero as number) ?? null
   }
 
   const semana = searchParams.semana ? parseInt(searchParams.semana, 10) : semanaDefault

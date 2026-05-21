@@ -46,6 +46,10 @@ export default async function VendasPage() {
     .order('data_pedido', { ascending: false })
     .range(0, PAGE_SIZE - 1)
 
+  // Últimas 4 semanas para o seletor de semana (datas em BRT)
+  const { data: semanasRaw } = await supabase.rpc('listar_semanas_vendas', { p_limit: 4 })
+  const semanas: { numero: number; inicio: string; fim: string }[] = semanasRaw ?? []
+
   // KPIs iniciais — agregado no banco para evitar limite de 1000 linhas
   const { data: k } = await supabase.rpc('get_kpis_vendas', {
     p_inicio:      inicio,
@@ -74,6 +78,7 @@ export default async function VendasPage() {
       initialKpis={initialKpis}
       dataInicioDefault={dataInicio}
       dataFimDefault={dataFim}
+      semanas={semanas}
     />
   )
 }

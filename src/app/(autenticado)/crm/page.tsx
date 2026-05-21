@@ -13,7 +13,12 @@ export default async function CrmPage({
   if (!user) redirect('/login')
 
   const { data: semanaAtual } = await supabase.rpc('get_semana_atual')
-  const semanaDefault = semanaAtual as number ?? 172
+  let semanaDefault = semanaAtual as number | null
+  if (!semanaDefault) {
+    const { data: ultima } = await supabase
+      .from('webinario_semanas').select('numero').order('numero', { ascending: false }).limit(1).single()
+    semanaDefault = (ultima?.numero as number) ?? 1
+  }
 
   const semana = searchParams.semana ? parseInt(searchParams.semana, 10) : semanaDefault
   const semanaValida = isNaN(semana) ? semanaDefault : semana

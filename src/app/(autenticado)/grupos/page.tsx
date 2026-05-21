@@ -53,7 +53,12 @@ export default async function GruposPage({
     supabase.from('grupos_kpis_semana').select('numero_semana, adicionados, removidos, no_grupo_agora, membros_inicio_semana').order('numero_semana', { ascending: false }),
   ])
 
-  const semanaDefault = semanaAtual as number ?? 172
+  let semanaDefault = semanaAtual as number | null
+  if (!semanaDefault) {
+    const { data: ultima } = await supabase
+      .from('webinario_semanas').select('numero').order('numero', { ascending: false }).limit(1).single()
+    semanaDefault = (ultima?.numero as number) ?? 1
+  }
   const semanaParam = searchParams.semana ? parseInt(searchParams.semana, 10) : null
   const semanaNum = semanaParam && !isNaN(semanaParam) ? semanaParam : semanaDefault
 

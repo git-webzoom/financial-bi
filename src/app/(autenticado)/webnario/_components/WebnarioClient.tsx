@@ -139,12 +139,12 @@ export default function WebnarioClient({ semanaAtual, semanaInicial, periodoInic
         const q = busca.toLowerCase()
         if (!p.nome?.toLowerCase().includes(q) && !p.email.toLowerCase().includes(q)) return false
       }
-      if (dataInicio && p.data_acesso) {
-        if (p.data_acesso < dataInicio) return false
-      }
-      if (dataFim && p.data_acesso) {
-        // inclusivo: comparar até 23:59:59 do dia
-        if (p.data_acesso.slice(0, 10) > dataFim) return false
+      if (p.data_acesso && (dataInicio || dataFim)) {
+        // Converte data_acesso (UTC) para data em BRT (UTC-3)
+        const dataBrt = new Date(new Date(p.data_acesso).getTime() - 3 * 60 * 60 * 1000)
+        const dataStr = dataBrt.toISOString().slice(0, 10)
+        if (dataInicio && dataStr < dataInicio) return false
+        if (dataFim   && dataStr > dataFim)    return false
       }
       return true
     })
@@ -169,7 +169,7 @@ export default function WebnarioClient({ semanaAtual, semanaInicial, periodoInic
         onMudar={carregarSemana}
       />
 
-      <WebnarioKpis presencas={presencas} carregando={carregando} />
+      <WebnarioKpis presencas={presencasFiltradas} carregando={carregando} />
 
       <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
         <div className="px-5 py-4 flex items-center justify-between gap-4" style={{ borderBottom: '1px solid #1E1E1E' }}>

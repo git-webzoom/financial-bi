@@ -6,6 +6,7 @@ import { formatMoeda, formatData } from '@/lib/format'
 import VendaDrawer from './VendaDrawer'
 import { Search, X, ChevronDown } from 'lucide-react'
 import type { FiltroPersonalizado, RegraFiltro } from '@/lib/filtros-personalizados'
+interface SemanaOpcao { numero: number; inicio: string; fim: string }
 
 const PAGE_SIZE = 20
 
@@ -61,6 +62,7 @@ interface Props {
   initialKpis: Kpis
   dataInicioDefault: string
   dataFimDefault: string
+  semanas?: SemanaOpcao[]
 }
 
 const STATUS_OPTIONS = [
@@ -294,6 +296,7 @@ export default function VendasClient({
   initialKpis,
   dataInicioDefault,
   dataFimDefault,
+  semanas,
 }: Props) {
   const supabase = createClient()
   const [isPending, startTransition] = useTransition()
@@ -305,6 +308,7 @@ export default function VendasClient({
 
   const [dataInicio, setDataInicio] = useState(dataInicioDefault)
   const [dataFim, setDataFim]       = useState(dataFimDefault)
+  const [semanaVal,  setSemanaVal]  = useState('')
   const [produtoId, setProdutoId]   = useState('')
   const [status, setStatus]         = useState('')
   const [pagamento, setPagamento]   = useState('')
@@ -487,10 +491,13 @@ export default function VendasClient({
     setProdutoId(''); setStatus(''); setPagamento(''); setMarketplace('')
     setEmailsFiltro([])
     setTodasVendasEmails([])
+    setSemanaVal('')
+    setDataInicio(dataInicioDefault)
+    setDataFim(dataFimDefault)
     filtroPersonalizadoRef.current = null
     setFiltroSalvoAtivo('')
     setPagina(0)
-    buscar({ dataInicio, dataFim, produtoId: '', status: '', pagamento: '', marketplace: '', pagina: 0, emails: [] })
+    buscar({ dataInicio: dataInicioDefault, dataFim: dataFimDefault, produtoId: '', status: '', pagamento: '', marketplace: '', pagina: 0, emails: [] })
   }
 
   function mudarPagina(nova: number) {
@@ -562,6 +569,33 @@ export default function VendasClient({
               onBlur={e => (e.target.style.borderColor = '#222222')}
             />
           </div>
+
+          {semanas && semanas.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Semana</label>
+              <select
+                value={semanaVal}
+                onChange={e => {
+                  const val = e.target.value
+                  setSemanaVal(val)
+                  if (!val) return
+                  const [inicio, fim] = val.split('|')
+                  setDataInicio(inicio)
+                  setDataFim(fim)
+                  buscar({ dataInicio: inicio, dataFim: fim, produtoId, status, pagamento, marketplace, pagina: 0, emails: emailsFiltro })
+                  setPagina(0)
+                }}
+                style={inputStyle}
+                onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                onBlur={e => (e.target.style.borderColor = '#222222')}
+              >
+                <option value="">Selecionar semana…</option>
+                {semanas.map(s => (
+                  <option key={s.numero} value={`${s.inicio}|${s.fim}`}>Semana {s.numero}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Produto</label>

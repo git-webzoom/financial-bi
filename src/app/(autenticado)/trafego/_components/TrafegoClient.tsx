@@ -9,6 +9,7 @@ import TrafegoFiltros from './TrafegoFiltros'
 import TrafegoGrafico from './TrafegoGrafico'
 import TrafegoTabela from './TrafegoTabela'
 import type { FiltroPersonalizado, RegraFiltro } from '@/lib/filtros-personalizados'
+export interface SemanaOpcao { numero: number; inicio: string; fim: string }
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,7 @@ interface Props {
   }
   filtrosDefault: FiltrosTrafego
   pageSize:       number
+  semanas?:       SemanaOpcao[]
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -84,13 +86,22 @@ function aplicarRegras(q: any, regras: RegraFiltro[]) {
   return q
 }
 
-export default function TrafegoClient({ inicial, filtrosDefault, pageSize }: Props) {
+function dataISO(d: Date) { return d.toISOString().split('T')[0] }
+
+function calcFiltroLimpo(): FiltrosTrafego {
+  const hoje = new Date()
+  const d7   = new Date(hoje); d7.setDate(hoje.getDate() - 7)
+  return { inicio: dataISO(d7), fim: dataISO(hoje), conta: '', campanha: '', adset: '', pagina: 0 }
+}
+
+export default function TrafegoClient({ inicial, filtrosDefault, pageSize, semanas }: Props) {
   const supabase  = createClient()
   const router    = useRouter()
   const pathname  = usePathname()
   const [, startTransition] = useTransition()
 
   const filtroPersonalizadoRef = useRef<FiltroPersonalizado | null>(null)
+  const filtroLimpoRef = useRef<FiltrosTrafego>(calcFiltroLimpo())
 
   const [filtros,          setFiltros]          = useState<FiltrosTrafego>(filtrosDefault)
   const [kpis,             setKpis]             = useState(inicial.kpis)
@@ -256,6 +267,14 @@ export default function TrafegoClient({ inicial, filtrosDefault, pageSize }: Pro
     buscar(f)
   }
 
+  function handleLimpar() {
+    filtroPersonalizadoRef.current = null
+    setFiltroSalvoAtivo('')
+    const f = { ...filtroLimpoRef.current }
+    setFiltros(f)
+    buscar(f)
+  }
+
   function handleFiltroSalvo(id: string) {
     const filtro = filtrosSalvos.find(f => f.id === id) ?? null
     filtroPersonalizadoRef.current = filtro
@@ -282,6 +301,8 @@ export default function TrafegoClient({ inicial, filtrosDefault, pageSize }: Pro
         filtrosSalvos={filtrosSalvos}
         filtroSalvoAtivo={filtroSalvoAtivo}
         onFiltroSalvo={handleFiltroSalvo}
+        onLimpar={handleLimpar}
+        semanas={semanas}
       />
 
       <TrafegoGrafico dados={grafico} />

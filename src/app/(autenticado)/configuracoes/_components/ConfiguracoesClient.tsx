@@ -77,7 +77,7 @@ const WEBHOOK_TABELAS = [
   { tabela: 'raw_vendas', label: 'Manager Guru — Vendas' },
 ]
 
-type Aba = 'integracoes' | 'manager_guru' | 'meta_ads' | 'activecampaign' | 'sendflow' | 'usuarios' | 'filtros'
+type Aba = 'integracoes' | 'manager_guru' | 'meta_ads' | 'activecampaign' | 'sendflow' | 'usuarios' | 'filtros' | 'semanas'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -2757,6 +2757,217 @@ function AbaFiltrosPersonalizados() {
   )
 }
 
+// ─── Aba Configuração de Semanas ──────────────────────────────────────────────
+
+interface SemanaConfigRow {
+  entidade:    string
+  dia_inicio:  number
+  hora_inicio: string
+  dia_fim:     number
+  hora_fim:    string
+}
+
+const ENTIDADES_SEMANA: { key: string; label: string; descricao: string }[] = [
+  { key: 'captacao', label: 'Semana captação', descricao: 'Ritmo de captação — define início/fim das semanas para CRM, Grupos e Tráfego' },
+  { key: 'webn',     label: 'Semana webn',     descricao: 'Ritmo do evento — define início/fim das semanas para Vendas e Webinário' },
+]
+
+const DIAS_SEMANA = [
+  { value: 0, label: 'Domingo' },
+  { value: 1, label: 'Segunda-feira' },
+  { value: 2, label: 'Terça-feira' },
+  { value: 3, label: 'Quarta-feira' },
+  { value: 4, label: 'Quinta-feira' },
+  { value: 5, label: 'Sexta-feira' },
+  { value: 6, label: 'Sábado' },
+]
+
+function CardSemanaConfig({
+  entidade,
+  label,
+  descricao,
+  config,
+  onSalvo,
+}: {
+  entidade:  string
+  label:     string
+  descricao: string
+  config:    SemanaConfigRow | null
+  onSalvo:   () => void
+}) {
+  const supabase = createClient()
+
+  const [diaInicio,  setDiaInicio]  = useState(config?.dia_inicio  ?? 3)
+  const [horaInicio, setHoraInicio] = useState((config?.hora_inicio ?? '00:00:00').slice(0, 5))
+  const [diaFim,     setDiaFim]     = useState(config?.dia_fim      ?? 2)
+  const [horaFim,    setHoraFim]    = useState((config?.hora_fim    ?? '20:00:00').slice(0, 5))
+  const [salvando,   setSalvando]   = useState(false)
+  const [msg,        setMsg]        = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+
+  useEffect(() => {
+    if (!config) return
+    setDiaInicio(config.dia_inicio)
+    setHoraInicio(config.hora_inicio.slice(0, 5))
+    setDiaFim(config.dia_fim)
+    setHoraFim(config.hora_fim.slice(0, 5))
+  }, [config])
+
+  const inputStyle: React.CSSProperties = {
+    backgroundColor: '#0A0A0A',
+    border: '1px solid #333333',
+    color: '#FFFFFF',
+    borderRadius: '0.5rem',
+    padding: '0.5rem 0.75rem',
+    fontSize: '0.875rem',
+    outline: 'none',
+    width: '100%',
+  }
+
+  async function salvar() {
+    setSalvando(true)
+    setMsg(null)
+    const { error } = await supabase
+      .from('semana_config')
+      .upsert({
+        entidade,
+        dia_inicio:  diaInicio,
+        hora_inicio: horaInicio + ':00',
+        dia_fim:     diaFim,
+        hora_fim:    horaFim    + ':00',
+        updated_at:  new Date().toISOString(),
+      }, { onConflict: 'entidade' })
+    setSalvando(false)
+    if (error) {
+      setMsg({ type: 'err', text: 'Erro ao salvar: ' + error.message })
+    } else {
+      setMsg({ type: 'ok', text: 'Salvo com sucesso' })
+      onSalvo()
+      setTimeout(() => setMsg(null), 3000)
+    }
+  }
+
+  return (
+    <div className="rounded-xl p-5 space-y-4" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
+      <div>
+        <p className="text-sm font-semibold" style={{ color: '#FFFFFF' }}>{label}</p>
+        <p className="text-xs mt-0.5" style={{ color: '#555555' }}>{descricao}</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* Início */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium" style={{ color: '#888888' }}>Início da semana (horário de Brasília)</p>
+          <select
+            value={diaInicio}
+            onChange={e => setDiaInicio(Number(e.target.value))}
+            style={inputStyle}
+          >
+            {DIAS_SEMANA.map(d => (
+              <option key={d.value} value={d.value}>{d.label}</option>
+            ))}
+          </select>
+          <input
+            type="time"
+            value={horaInicio}
+            onChange={e => setHoraInicio(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+
+        {/* Fim */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium" style={{ color: '#888888' }}>Fim da semana (horário de Brasília)</p>
+          <select
+            value={diaFim}
+            onChange={e => setDiaFim(Number(e.target.value))}
+            style={inputStyle}
+          >
+            {DIAS_SEMANA.map(d => (
+              <option key={d.value} value={d.value}>{d.label}</option>
+            ))}
+          </select>
+          <input
+            type="time"
+            value={horaFim}
+            onChange={e => setHoraFim(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={salvar}
+          disabled={salvando}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
+          style={{
+            backgroundColor: salvando ? '#1A1A1A' : '#C9A84C22',
+            border: '1px solid #C9A84C44',
+            color: salvando ? '#555555' : '#C9A84C',
+            cursor: salvando ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {salvando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+          Salvar
+        </button>
+        {msg && (
+          <span className="text-xs" style={{ color: msg.type === 'ok' ? '#4ADE80' : '#F87171' }}>
+            {msg.text}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function AbaConfiguracaoSemanas() {
+  const supabase = createClient()
+  const [configs,    setConfigs]    = useState<SemanaConfigRow[]>([])
+  const [carregando, setCarregando] = useState(true)
+
+  async function carregar() {
+    setCarregando(true)
+    const { data } = await supabase.from('semana_config').select('*')
+    setConfigs(data ?? [])
+    setCarregando(false)
+  }
+
+  useEffect(() => { carregar() }, [])
+
+  if (carregando) {
+    return (
+      <div className="flex items-center gap-2 py-8" style={{ color: '#555555' }}>
+        <Loader2 className="w-4 h-4 animate-spin" />
+        <span className="text-sm">Carregando configurações...</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-sm font-medium" style={{ color: '#FFFFFF' }}>Configuração de Semanas</p>
+        <p className="text-xs mt-0.5" style={{ color: '#555555' }}>
+          Define o dia e hora (horário de Brasília) em que cada semana começa e termina por módulo.
+          Alterações afetam novas semanas criadas e os atalhos de filtro em Vendas e Tráfego.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {ENTIDADES_SEMANA.map(e => (
+          <CardSemanaConfig
+            key={e.key}
+            entidade={e.key}
+            label={e.label}
+            descricao={e.descricao}
+            config={configs.find(c => c.entidade === e.key) ?? null}
+            onSalvo={carregar}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function ConfiguracoesClient({ inicial, meuId }: { inicial: DadosConfiguracao; meuId: string }) {
@@ -2829,6 +3040,7 @@ export default function ConfiguracoesClient({ inicial, meuId }: { inicial: Dados
     { key: 'sendflow',       label: 'Sendflow' },
     { key: 'usuarios',       label: 'Usuários' },
     { key: 'filtros',        label: 'Filtros Personalizados' },
+    { key: 'semanas',        label: 'Semanas' },
   ]
 
   return (
@@ -2933,6 +3145,10 @@ export default function ConfiguracoesClient({ inicial, meuId }: { inicial: Dados
 
       {aba === 'filtros' && (
         <AbaFiltrosPersonalizados />
+      )}
+
+      {aba === 'semanas' && (
+        <AbaConfiguracaoSemanas />
       )}
     </div>
   )

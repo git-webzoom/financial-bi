@@ -1,8 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import SelectBusca from './SelectBusca'
 import type { FiltrosTrafego, MetaAccount } from './TrafegoClient'
 import type { FiltroPersonalizado } from '@/lib/filtros-personalizados'
+import type { SemanaOpcao } from './TrafegoClient'
 
 interface Props {
   filtros:              FiltrosTrafego
@@ -14,6 +16,8 @@ interface Props {
   filtrosSalvos:        FiltroPersonalizado[]
   filtroSalvoAtivo:     string
   onFiltroSalvo:        (id: string) => void
+  onLimpar:             () => void
+  semanas?:             SemanaOpcao[]
 }
 
 const inputStyle: React.CSSProperties = {
@@ -28,8 +32,9 @@ const inputStyle: React.CSSProperties = {
 
 export default function TrafegoFiltros({
   filtros, metaAccounts, campanhas, adsets, carregando, onChange,
-  filtrosSalvos, filtroSalvoAtivo, onFiltroSalvo,
+  filtrosSalvos, filtroSalvoAtivo, onFiltroSalvo, onLimpar, semanas,
 }: Props) {
+  const [semanaVal, setSemanaVal] = useState('')
   const opcoesContas    = metaAccounts.map(a => ({ value: a.account_id, label: a.nome }))
   const opcoesCampanhas = campanhas.map(c => ({ value: c, label: c }))
   const opcoesAdsets    = adsets.map(a => ({ value: a, label: a }))
@@ -64,6 +69,31 @@ export default function TrafegoFiltros({
             onBlur={e => (e.target.style.borderColor = '#222222')}
           />
         </div>
+
+        {semanas && semanas.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Semana</label>
+            <select
+              disabled={carregando}
+              value={semanaVal}
+              onChange={e => {
+                const val = e.target.value
+                setSemanaVal(val)
+                if (!val) return
+                const [inicio, fim] = val.split('|')
+                onChange({ inicio, fim })
+              }}
+              style={inputStyle}
+              onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+              onBlur={e => (e.target.style.borderColor = '#222222')}
+            >
+              <option value="">Selecionar semana…</option>
+              {semanas.map(s => (
+                <option key={s.numero} value={`${s.inicio}|${s.fim}`}>Semana {s.numero}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Conta */}
         <div className="flex flex-col gap-1">
@@ -126,7 +156,7 @@ export default function TrafegoFiltros({
 
         {/* Limpar */}
         <button
-          onClick={() => { onChange({ conta: '', campanha: '', adset: '' }); onFiltroSalvo('') }}
+          onClick={() => { setSemanaVal(''); onLimpar() }}
           disabled={carregando}
           className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
           style={{ backgroundColor: 'transparent', border: '1px solid #333333', color: '#888888' }}
