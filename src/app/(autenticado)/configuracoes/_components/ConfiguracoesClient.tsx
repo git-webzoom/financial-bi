@@ -199,7 +199,8 @@ function CardIntegracao({
         <div className="px-5 py-3" style={{ borderTop: '1px solid #1E1E1E', backgroundColor: '#0A0A0A' }}>
           {jobs.length === 0
             ? <p className="text-xs py-2" style={{ color: '#555555' }}>Nenhuma execução registrada.</p>
-            : <>
+            : <div className="overflow-x-auto">
+                <div style={{ minWidth: 480 }}>
                 <div className="grid grid-cols-5 gap-2 pb-1 text-xs font-medium" style={{ color: '#555555' }}>
                   <span className="col-span-2">Início</span>
                   <span>Status</span>
@@ -217,27 +218,28 @@ function CardIntegracao({
                       <button
                         onClick={() => setPagina(p => p - 1)}
                         disabled={pagina === 0}
-                        className="p-1 rounded transition-colors disabled:opacity-30"
+                        className="p-2 rounded transition-colors disabled:opacity-30"
                         style={{ color: '#888888' }}
                         onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#FFFFFF'}
                         onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#888888'}
                       >
-                        <ChevronLeft className="w-3.5 h-3.5" />
+                        <ChevronLeft className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => setPagina(p => p + 1)}
                         disabled={pagina >= totalPaginas - 1}
-                        className="p-1 rounded transition-colors disabled:opacity-30"
+                        className="p-2 rounded transition-colors disabled:opacity-30"
                         style={{ color: '#888888' }}
                         onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#FFFFFF'}
                         onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#888888'}
                       >
-                        <ChevronRight className="w-3.5 h-3.5" />
+                        <ChevronRight className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
                 )}
-              </>
+                </div>
+              </div>
           }
         </div>
       )}
@@ -821,7 +823,7 @@ function AbaMetaAds({
               value={novoId}
               onChange={e => setNovoId(e.target.value)}
               placeholder="ID (ex: act_123456789)"
-              className="w-52 px-3 py-2 text-sm rounded-lg outline-none font-mono"
+              className="w-full sm:w-52 px-3 py-2 text-sm rounded-lg outline-none font-mono"
               style={{ backgroundColor: '#111111', border: '1px solid #333333', color: '#FFFFFF' }}
               onKeyDown={e => e.key === 'Enter' && adicionarConta()}
               onFocus={e => (e.target.style.borderColor = '#C9A84C')}
@@ -3044,7 +3046,7 @@ export default function ConfiguracoesClient({ inicial, meuId }: { inicial: Dados
   ]
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 md:p-6 space-y-5">
 
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -3074,13 +3076,16 @@ export default function ConfiguracoesClient({ inicial, meuId }: { inicial: Dados
         </button>
       </div>
 
-      {/* Abas */}
-      <div className="flex" style={{ borderBottom: '1px solid #1E1E1E' }}>
+      {/* Abas — scroll horizontal no mobile para não transbordar */}
+      <div
+        className="flex overflow-x-auto"
+        style={{ borderBottom: '1px solid #1E1E1E', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
         {abas.map(a => (
           <button
             key={a.key}
             onClick={() => setAba(a.key)}
-            className="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
+            className="px-3 md:px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0"
             style={aba === a.key
               ? { borderColor: '#C9A84C', color: '#C9A84C' }
               : { borderColor: 'transparent', color: '#888888' }

@@ -123,7 +123,7 @@ export default function WebnarioTabela({ presencas, carregando }: Props) {
             <button
               onClick={() => setPagina(p => p - 1)}
               disabled={pagina === 0}
-              className="p-1.5 rounded-lg disabled:opacity-30 transition-colors"
+              className="p-2.5 rounded-lg disabled:opacity-30 transition-colors"
               style={{ color: '#888888' }}
               onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#FFFFFF'}
               onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#888888'}
@@ -133,7 +133,7 @@ export default function WebnarioTabela({ presencas, carregando }: Props) {
             <button
               onClick={() => setPagina(p => p + 1)}
               disabled={pagina >= totalPaginas - 1}
-              className="p-1.5 rounded-lg disabled:opacity-30 transition-colors"
+              className="p-2.5 rounded-lg disabled:opacity-30 transition-colors"
               style={{ color: '#888888' }}
               onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#FFFFFF'}
               onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#888888'}

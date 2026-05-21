@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import Sidebar from './_components/Sidebar'
-import Header from './_components/Header'
+import LayoutShell from './_components/LayoutShell'
 
 export default async function LayoutAutenticado({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
@@ -19,15 +18,8 @@ export default async function LayoutAutenticado({ children }: { children: React.
   const isAdmin = profile?.perfil === 'admin'
 
   return (
-    <div className="flex min-h-screen" style={{ backgroundColor: '#0A0A0A' }}>
-      <Sidebar nomeUsuario={nomeUsuario} isAdmin={isAdmin} />
-
-      <div className="flex-1 flex flex-col min-w-0" style={{ backgroundColor: '#0A0A0A' }}>
-        <Header nomeUsuario={nomeUsuario} />
-        <main className="flex-1 overflow-auto">
-          {children}
-        </main>
-      </div>
-    </div>
+    <LayoutShell nomeUsuario={nomeUsuario} isAdmin={isAdmin}>
+      {children}
+    </LayoutShell>
   )
 }

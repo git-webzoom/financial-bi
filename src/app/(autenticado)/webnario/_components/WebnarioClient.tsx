@@ -159,7 +159,7 @@ export default function WebnarioClient({ semanaAtual, semanaInicial, periodoInic
   const temFiltro = busca || dataInicio || dataFim
 
   return (
-    <div className="p-6 space-y-5" style={{ backgroundColor: '#0A0A0A', minHeight: '100vh' }}>
+    <div className="p-4 md:p-6 space-y-5" style={{ backgroundColor: '#0A0A0A', minHeight: '100vh' }}>
 
       <SeletorSemana
         semana={semana}
@@ -215,34 +215,34 @@ export default function WebnarioClient({ semanaAtual, semanaInicial, periodoInic
         </div>
 
         {/* Filtros */}
-        <div className="px-5 py-3 flex flex-wrap items-center gap-3" style={{ borderBottom: '1px solid #1A1A1A' }}>
+        <div className="px-4 md:px-5 py-3 flex flex-col md:flex-row md:flex-wrap md:items-center gap-2 md:gap-3" style={{ borderBottom: '1px solid #1A1A1A' }}>
           <input
             type="text"
             placeholder="Buscar por nome ou email..."
             value={busca}
             onChange={e => setBusca(e.target.value)}
-            style={{ ...inputStyle, minWidth: '220px', flex: 1 }}
+            style={{ ...inputStyle, flex: 1 }}
           />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs" style={{ color: '#555555' }}>De</span>
             <input
               type="date"
               value={dataInicio}
               onChange={e => setDataInicio(e.target.value)}
-              style={{ ...inputStyle, colorScheme: 'dark' }}
+              style={{ ...inputStyle, colorScheme: 'dark', flex: 1, minWidth: 130 }}
             />
             <span className="text-xs" style={{ color: '#555555' }}>até</span>
             <input
               type="date"
               value={dataFim}
               onChange={e => setDataFim(e.target.value)}
-              style={{ ...inputStyle, colorScheme: 'dark' }}
+              style={{ ...inputStyle, colorScheme: 'dark', flex: 1, minWidth: 130 }}
             />
           </div>
           {temFiltro && (
             <button
               onClick={limparFiltros}
-              className="text-xs px-3 py-1.5 rounded-lg"
+              className="text-xs px-3 py-2 rounded-lg self-start md:self-auto"
               style={{ color: '#888888', border: '1px solid #2A2A2A', backgroundColor: 'transparent' }}
               onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#FFFFFF'}
               onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#888888'}

@@ -4,7 +4,7 @@ import { useState, useCallback, useTransition, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatMoeda, formatData } from '@/lib/format'
 import VendaDrawer from './VendaDrawer'
-import { Search, X, ChevronDown } from 'lucide-react'
+import { Search, X, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react'
 import type { FiltroPersonalizado, RegraFiltro } from '@/lib/filtros-personalizados'
 interface SemanaOpcao { numero: number; inicio: string; fim: string }
 
@@ -315,6 +315,7 @@ export default function VendasClient({
   const [marketplace, setMarketplace] = useState('')
   const [emailsFiltro, setEmailsFiltro] = useState<string[]>([])
   const [todasVendasEmails, setTodasVendasEmails] = useState<Venda[]>([])
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false)
 
   const [vendas, setVendas]   = useState<Venda[]>(initialVendas)
   const [total, setTotal]     = useState(initialTotal)
@@ -510,7 +511,7 @@ export default function VendasClient({
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 md:p-6 space-y-5">
 
       {/* Banner filtro CRM */}
       {emailsFiltro.length > 0 && (
@@ -545,9 +546,27 @@ export default function VendasClient({
 
       {/* Filtros */}
       <div
-        className="rounded-xl p-4"
+        className="rounded-xl"
         style={{ backgroundColor: '#111111', border: '1px solid #222222' }}
       >
+        {/* Toggle mobile */}
+        <div
+          className="flex items-center justify-between px-4 py-3 md:hidden cursor-pointer"
+          style={{ borderBottom: filtrosAbertos ? '1px solid #222222' : 'none' }}
+          onClick={() => setFiltrosAbertos(v => !v)}
+        >
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="w-4 h-4" style={{ color: '#888888' }} />
+            <span className="text-sm font-medium" style={{ color: '#FFFFFF' }}>Filtros</span>
+          </div>
+          {filtrosAbertos
+            ? <ChevronUp className="w-4 h-4" style={{ color: '#888888' }} />
+            : <ChevronDown className="w-4 h-4" style={{ color: '#888888' }} />
+          }
+        </div>
+
+        {/* Conteúdo: sempre visível no desktop, toggle no mobile */}
+        <div className={`p-4 ${filtrosAbertos ? 'block' : 'hidden'} md:block`}>
         <div className="flex flex-wrap gap-3 items-end">
 
           <div className="flex flex-col gap-1">
@@ -678,6 +697,7 @@ export default function VendasClient({
               Limpar
             </button>
           </div>
+        </div>
         </div>
       </div>
 

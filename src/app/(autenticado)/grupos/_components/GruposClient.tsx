@@ -4,9 +4,10 @@ import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatData } from '@/lib/format'
-import { ArrowLeft, Users, LayoutGrid, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Users, LayoutGrid, RefreshCw } from 'lucide-react'
 import type { SendflowCampanha, SendflowGrupo, GruposKpisSemana } from '../page'
 import GruposTabela from './GruposTabela'
+import SeletorSemana from '@/app/(autenticado)/crm/_components/SeletorSemana'
 
 interface Props {
   campanhasIniciais: SendflowCampanha[]
@@ -120,7 +121,7 @@ export default function GruposClient({ campanhasIniciais, kpisGrupo, semanaAtual
   // ── Visão detalhada de uma campanha ──────────────────────────────────────────
   if (campanhaAberta) {
     return (
-      <div className="p-6 space-y-5" style={{ backgroundColor: '#0A0A0A', minHeight: '100vh' }}>
+      <div className="p-4 md:p-6 space-y-5" style={{ backgroundColor: '#0A0A0A', minHeight: '100vh' }}>
 
         {/* Breadcrumb / voltar */}
         <div className="flex items-center gap-3">
@@ -139,7 +140,7 @@ export default function GruposClient({ campanhasIniciais, kpisGrupo, semanaAtual
         </div>
 
         {/* KPIs da campanha */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <KpiCard
             label="Grupos"
             valor={campanhaAberta.total_grupos}
@@ -194,43 +195,22 @@ export default function GruposClient({ campanhasIniciais, kpisGrupo, semanaAtual
   return (
     <div className="p-6 space-y-5" style={{ backgroundColor: '#0A0A0A', minHeight: '100vh' }}>
 
-      {/* Seletor de semana */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-bold" style={{ color: '#FFFFFF' }}>Grupos Captação Webnário</h2>
-          <p className="text-xs mt-0.5" style={{ color: '#555555' }}>
-            Atualizado via API Sendflow · a cada 15 minutos
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => semanaAnterior && irParaSemana(semanaAnterior)}
-            disabled={!semanaAnterior}
-            className="px-3 py-1.5 rounded-lg text-sm disabled:opacity-30 transition-colors"
-            style={{ border: '1px solid #222222', color: '#888888', backgroundColor: 'transparent' }}
-            onMouseEnter={e => { if (semanaAnterior) (e.currentTarget as HTMLElement).style.color = '#FFFFFF' }}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#888888'}
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <div className="px-4 py-1.5 rounded-lg text-sm font-semibold" style={{ border: '1px solid #333333', color: '#FFFFFF', backgroundColor: '#111111' }}>
-            Semana {semana}
-            {semana === semanaAtual && (
-              <span className="ml-2 px-1.5 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#1A2A1A', color: '#4ADE80' }}>Atual</span>
-            )}
-          </div>
-          <button
-            onClick={() => proximaSemana && irParaSemana(proximaSemana)}
-            disabled={!proximaSemana}
-            className="px-3 py-1.5 rounded-lg text-sm disabled:opacity-30 transition-colors"
-            style={{ border: '1px solid #222222', color: '#888888', backgroundColor: 'transparent' }}
-            onMouseEnter={e => { if (proximaSemana) (e.currentTarget as HTMLElement).style.color = '#FFFFFF' }}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#888888'}
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
+      {/* Título */}
+      <div>
+        <h2 className="text-base font-bold" style={{ color: '#FFFFFF' }}>Grupos Captação Webnário</h2>
+        <p className="text-xs mt-0.5" style={{ color: '#555555' }}>
+          Atualizado via API Sendflow · a cada 15 minutos
+        </p>
       </div>
+
+      {/* Seletor de semana — mesmo componente do CRM/Webinário */}
+      <SeletorSemana
+        semana={semana}
+        semanaAtual={semanaAtual}
+        periodo={null}
+        carregando={false}
+        onMudar={irParaSemana}
+      />
 
       <div className="grid grid-cols-1 gap-4" style={{ maxWidth: '320px' }}>
         <KpiCard
@@ -255,7 +235,7 @@ export default function GruposClient({ campanhasIniciais, kpisGrupo, semanaAtual
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {campanhas.map(c => (
             <CampanhaCard key={c.id} campanha={c} onClick={() => abrirCampanha(c)} />
           ))}

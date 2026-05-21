@@ -107,7 +107,7 @@ export default function TrafegoTabela({
           <button
             onClick={() => onPagina(pagina - 1)}
             disabled={pagina === 0 || carregando}
-            className="p-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="p-2.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ border: '1px solid #333333', color: '#888888', backgroundColor: 'transparent' }}
             onMouseEnter={e => { if (!e.currentTarget.disabled) (e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A' }}
             onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}
@@ -120,7 +120,7 @@ export default function TrafegoTabela({
           <button
             onClick={() => onPagina(pagina + 1)}
             disabled={fim >= total || carregando}
-            className="p-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="p-2.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ border: '1px solid #333333', color: '#888888', backgroundColor: 'transparent' }}
             onMouseEnter={e => { if (!e.currentTarget.disabled) (e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A' }}
             onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}

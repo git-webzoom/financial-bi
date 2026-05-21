@@ -283,7 +283,7 @@ export default function TrafegoClient({ inicial, filtrosDefault, pageSize, seman
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 md:p-6 space-y-5">
       <div>
         <h2 className="text-base font-bold" style={{ color: '#FFFFFF' }}>Tráfego Pago</h2>
         <p className="text-xs mt-0.5" style={{ color: '#888888' }}>Meta Ads — dados sincronizados automaticamente</p>

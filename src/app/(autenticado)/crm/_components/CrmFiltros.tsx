@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, ChevronDown } from 'lucide-react'
+import { X, ChevronDown, SlidersHorizontal } from 'lucide-react'
 import type { InscritoCrm, FiltrosCrm } from './CrmClient'
 
 interface Props {
@@ -34,7 +34,7 @@ function MultiSelect({
     <div ref={ref} className="relative">
       <button
         onClick={() => setAberto(v => !v)}
-        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm"
+        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm w-full"
         style={{
           backgroundColor: '#0A0A0A', border: `1px solid ${selecionados.length > 0 ? '#C9A84C' : '#333333'}`,
           color: selecionados.length > 0 ? '#C9A84C' : '#888888', minWidth: 130,
@@ -89,6 +89,7 @@ function MultiSelect({
 
 export default function CrmFiltros({ inscritos, filtros, onChange }: Props) {
   const [buscaLocal, setBuscaLocal] = useState(filtros.busca)
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout>>()
 
   function onBusca(v: string) {
@@ -103,6 +104,13 @@ export default function CrmFiltros({ inscritos, filtros, onChange }: Props) {
   const temFiltro = filtros.busca || filtros.sources.length || filtros.campaigns.length ||
     filtros.tipo !== 'todos' || filtros.temperatura
 
+  const contFiltrosAtivos = [
+    filtros.sources.length > 0,
+    filtros.campaigns.length > 0,
+    filtros.tipo !== 'todos',
+    !!filtros.temperatura,
+  ].filter(Boolean).length
+
   const inputStyle: React.CSSProperties = {
     backgroundColor: '#0A0A0A', border: '1px solid #333333', color: '#FFFFFF',
     borderRadius: '0.5rem', padding: '0.5rem 0.75rem', fontSize: '0.875rem', outline: 'none',
@@ -111,69 +119,129 @@ export default function CrmFiltros({ inscritos, filtros, onChange }: Props) {
     ...inputStyle, appearance: 'none', paddingRight: '2rem', cursor: 'pointer',
   }
 
+  function limparTudo() {
+    setBuscaLocal('')
+    onChange({ busca: '', sources: [], campaigns: [], tipo: 'todos', temperatura: '', sourceGrafico: null, campaignGrafico: null })
+  }
+
   return (
-    <div className="px-5 py-3 flex items-center gap-2 flex-wrap" style={{ borderBottom: '1px solid #1E1E1E', backgroundColor: '#0A0A0A' }}>
-      <input
-        type="text"
-        value={buscaLocal}
-        onChange={e => onBusca(e.target.value)}
-        placeholder="Buscar nome ou email…"
-        style={{ ...inputStyle, minWidth: 200 }}
-        onFocus={e => (e.target.style.borderColor = '#C9A84C')}
-        onBlur={e => (e.target.style.borderColor = '#333333')}
-      />
+    <div style={{ borderBottom: '1px solid #1E1E1E', backgroundColor: '#0A0A0A' }}>
+      {/* Barra superior: busca + toggle filtros (mobile) */}
+      <div className="px-4 md:px-5 py-3 flex items-center gap-2">
+        <input
+          type="text"
+          value={buscaLocal}
+          onChange={e => onBusca(e.target.value)}
+          placeholder="Buscar nome ou email…"
+          style={{ ...inputStyle, flex: 1 }}
+          onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+          onBlur={e => (e.target.style.borderColor = '#333333')}
+        />
 
-      <MultiSelect
-        label="utm_source"
-        opcoes={sources}
-        selecionados={filtros.sources}
-        onToggle={v => onChange({ ...filtros, sources: filtros.sources.includes(v) ? filtros.sources.filter(s => s !== v) : [...filtros.sources, v] })}
-        onLimpar={() => onChange({ ...filtros, sources: [] })}
-      />
-
-      <MultiSelect
-        label="utm_campaign"
-        opcoes={campaigns}
-        selecionados={filtros.campaigns}
-        onToggle={v => onChange({ ...filtros, campaigns: filtros.campaigns.includes(v) ? filtros.campaigns.filter(c => c !== v) : [...filtros.campaigns, v] })}
-        onLimpar={() => onChange({ ...filtros, campaigns: [] })}
-      />
-
-      <select
-        value={filtros.tipo}
-        onChange={e => onChange({ ...filtros, tipo: e.target.value as FiltrosCrm['tipo'] })}
-        style={selectStyle}
-      >
-        <option value="todos">Todos</option>
-        <option value="novos">Apenas novos</option>
-        <option value="recorrentes">Apenas recorrentes</option>
-        <option value="compradores">Apenas compradores</option>
-      </select>
-
-      <select
-        value={filtros.temperatura}
-        onChange={e => onChange({ ...filtros, temperatura: e.target.value })}
-        style={selectStyle}
-      >
-        <option value="">Temperatura</option>
-        <option value="Quente">Quente</option>
-        <option value="Morno">Morno</option>
-        <option value="Frio">Frio</option>
-      </select>
-
-      {temFiltro && (
+        {/* Botão filtros — visível só no mobile (md:hidden) */}
         <button
-          onClick={() => {
-            setBuscaLocal('')
-            onChange({ busca: '', sources: [], campaigns: [], tipo: 'todos', temperatura: '', sourceGrafico: null, campaignGrafico: null })
+          onClick={() => setFiltrosAbertos(v => !v)}
+          className="md:hidden flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm shrink-0"
+          style={{
+            backgroundColor: '#0A0A0A',
+            border: `1px solid ${contFiltrosAtivos > 0 ? '#C9A84C' : '#333333'}`,
+            color: contFiltrosAtivos > 0 ? '#C9A84C' : '#888888',
           }}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm"
-          style={{ border: '1px solid #333333', color: '#F87171', backgroundColor: 'transparent' }}
-          onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'}
-          onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}
         >
-          <X className="w-3.5 h-3.5" />Limpar filtros
+          <SlidersHorizontal className="w-4 h-4" />
+          {contFiltrosAtivos > 0 && (
+            <span className="w-4 h-4 rounded-full text-xs font-bold flex items-center justify-center"
+              style={{ backgroundColor: '#C9A84C', color: '#000000' }}>
+              {contFiltrosAtivos}
+            </span>
+          )}
         </button>
+
+        {/* Filtros inline no desktop */}
+        <div className="hidden md:flex items-center gap-2 flex-wrap">
+          <MultiSelect
+            label="utm_source"
+            opcoes={sources}
+            selecionados={filtros.sources}
+            onToggle={v => onChange({ ...filtros, sources: filtros.sources.includes(v) ? filtros.sources.filter(s => s !== v) : [...filtros.sources, v] })}
+            onLimpar={() => onChange({ ...filtros, sources: [] })}
+          />
+          <MultiSelect
+            label="utm_campaign"
+            opcoes={campaigns}
+            selecionados={filtros.campaigns}
+            onToggle={v => onChange({ ...filtros, campaigns: filtros.campaigns.includes(v) ? filtros.campaigns.filter(c => c !== v) : [...filtros.campaigns, v] })}
+            onLimpar={() => onChange({ ...filtros, campaigns: [] })}
+          />
+          <select value={filtros.tipo} onChange={e => onChange({ ...filtros, tipo: e.target.value as FiltrosCrm['tipo'] })} style={selectStyle}>
+            <option value="todos">Todos</option>
+            <option value="novos">Apenas novos</option>
+            <option value="recorrentes">Apenas recorrentes</option>
+            <option value="compradores">Apenas compradores</option>
+          </select>
+          <select value={filtros.temperatura} onChange={e => onChange({ ...filtros, temperatura: e.target.value })} style={selectStyle}>
+            <option value="">Temperatura</option>
+            <option value="Quente">Quente</option>
+            <option value="Morno">Morno</option>
+            <option value="Frio">Frio</option>
+          </select>
+          {temFiltro && (
+            <button
+              onClick={limparTudo}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm"
+              style={{ border: '1px solid #333333', color: '#F87171', backgroundColor: 'transparent' }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}
+            >
+              <X className="w-3.5 h-3.5" />Limpar
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Painel de filtros expandido — apenas mobile */}
+      {filtrosAbertos && (
+        <div className="md:hidden px-4 pb-3 flex flex-col gap-2" style={{ borderTop: '1px solid #1E1E1E' }}>
+          <div className="pt-3 grid grid-cols-2 gap-2">
+            <MultiSelect
+              label="utm_source"
+              opcoes={sources}
+              selecionados={filtros.sources}
+              onToggle={v => onChange({ ...filtros, sources: filtros.sources.includes(v) ? filtros.sources.filter(s => s !== v) : [...filtros.sources, v] })}
+              onLimpar={() => onChange({ ...filtros, sources: [] })}
+            />
+            <MultiSelect
+              label="utm_campaign"
+              opcoes={campaigns}
+              selecionados={filtros.campaigns}
+              onToggle={v => onChange({ ...filtros, campaigns: filtros.campaigns.includes(v) ? filtros.campaigns.filter(c => c !== v) : [...filtros.campaigns, v] })}
+              onLimpar={() => onChange({ ...filtros, campaigns: [] })}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <select value={filtros.tipo} onChange={e => onChange({ ...filtros, tipo: e.target.value as FiltrosCrm['tipo'] })} style={{ ...selectStyle, width: '100%' }}>
+              <option value="todos">Todos</option>
+              <option value="novos">Apenas novos</option>
+              <option value="recorrentes">Apenas recorrentes</option>
+              <option value="compradores">Apenas compradores</option>
+            </select>
+            <select value={filtros.temperatura} onChange={e => onChange({ ...filtros, temperatura: e.target.value })} style={{ ...selectStyle, width: '100%' }}>
+              <option value="">Temperatura</option>
+              <option value="Quente">Quente</option>
+              <option value="Morno">Morno</option>
+              <option value="Frio">Frio</option>
+            </select>
+          </div>
+          {temFiltro && (
+            <button
+              onClick={() => { limparTudo(); setFiltrosAbertos(false) }}
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm w-full"
+              style={{ border: '1px solid #333333', color: '#F87171', backgroundColor: 'transparent' }}
+            >
+              <X className="w-3.5 h-3.5" />Limpar filtros
+            </button>
+          )}
+        </div>
       )}
     </div>
   )

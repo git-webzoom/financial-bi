@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { Search, X, Package, Tag, ChevronDown } from 'lucide-react'
@@ -193,7 +193,7 @@ function Paginacao({
         Anterior
       </button>
       <span className="text-xs" style={{ color: '#888888' }}>
-        Página {pagina + 1} de {totalPaginas}
+        PÃ¡gina {pagina + 1} de {totalPaginas}
       </span>
       <button
         onClick={() => onChange(pagina + 1)}
@@ -201,7 +201,7 @@ function Paginacao({
         className="px-3 py-1.5 rounded-lg text-sm disabled:opacity-30 transition-colors"
         style={{ backgroundColor: '#1A1A1A', color: '#CCCCCC' }}
       >
-        Próxima
+        PrÃ³xima
       </button>
     </div>
   )
@@ -279,7 +279,7 @@ function AbaProdutos({ produtos, ofertas }: { produtos: Produto[]; ofertas: Ofer
 
         {slice.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm" style={{ color: '#555555' }}>
-            {busca ? 'Nenhum produto encontrado para essa busca.' : 'Nenhum produto cadastrado. Sincronize na aba Configurações → Manager Guru.'}
+            {busca ? 'Nenhum produto encontrado para essa busca.' : 'Nenhum produto cadastrado. Sincronize na aba ConfiguraÃ§Ãµes â†’ Manager Guru.'}
           </div>
         ) : (
           slice.map(p => (
@@ -412,7 +412,7 @@ function AbaOfertas({ produtos, ofertas }: { produtos: Produto[]; ofertas: Ofert
 
         {slice.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm" style={{ color: '#555555' }}>
-            {busca || produtoFiltro ? 'Nenhuma oferta encontrada para esses filtros.' : 'Nenhuma oferta cadastrada. Sincronize na aba Configurações → Manager Guru.'}
+            {busca || produtoFiltro ? 'Nenhuma oferta encontrada para esses filtros.' : 'Nenhuma oferta cadastrada. Sincronize na aba ConfiguraÃ§Ãµes â†’ Manager Guru.'}
           </div>
         ) : (
           slice.map(o => (
@@ -439,7 +439,7 @@ function AbaOfertas({ produtos, ofertas }: { produtos: Produto[]; ofertas: Ofert
                 )}
               </div>
               <div className="text-sm truncate" style={{ color: '#888888' }}>
-                {nomePorProdutoId[o.produto_id] ?? '—'}
+                {nomePorProdutoId[o.produto_id] ?? 'â€”'}
               </div>
               <div className="text-sm text-right font-medium" style={{ color: '#FFFFFF' }}>
                 {formatMoeda(o.valor, o.moeda)}
@@ -451,12 +451,12 @@ function AbaOfertas({ produtos, ofertas }: { produtos: Produto[]; ofertas: Ofert
                 {o.pagamentos?.map(pg => {
                   const label: Record<string, string> = {
                     pix: 'PIX',
-                    credit_card: 'Cartão',
+                    credit_card: 'CartÃ£o',
                     boleto: 'Boleto',
                     bank_transfer: 'TED',
                   }
                   return label[pg] ?? pg
-                }).join(', ') ?? '—'}
+                }).join(', ') ?? 'â€”'}
               </div>
             </div>
           ))
@@ -477,7 +477,7 @@ export default function ProdutosClient({ initialProdutos, initialOfertas }: Prop
   ]
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 md:p-6 space-y-5">
       {/* Header */}
       <div>
         <h2 className="text-base font-bold" style={{ color: '#FFFFFF' }}>Produtos</h2>
@@ -517,7 +517,7 @@ export default function ProdutosClient({ initialProdutos, initialOfertas }: Prop
         </div>
       </div>
 
-      {/* Conteúdo */}
+      {/* ConteÃºdo */}
       {aba === 'produtos' && (
         <AbaProdutos produtos={initialProdutos} ofertas={initialOfertas} />
       )}

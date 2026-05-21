@@ -1,6 +1,6 @@
-export default function Loading() {
+﻿export default function Loading() {
   return (
-    <div className="p-6 space-y-5 animate-pulse">
+    <div className="p-4 md:p-6 space-y-5 animate-pulse">
       <div className="h-6 w-28 rounded-lg" style={{ backgroundColor: '#1A1A1A' }} />
 
       {/* KPIs */}
@@ -16,7 +16,7 @@ export default function Loading() {
       {/* Filtros */}
       <div className="rounded-xl p-4 h-16" style={{ backgroundColor: '#111111', border: '1px solid #222222' }} />
 
-      {/* Gráfico */}
+      {/* GrÃ¡fico */}
       <div className="rounded-xl h-56" style={{ backgroundColor: '#111111', border: '1px solid #222222' }} />
 
       {/* Tabela */}

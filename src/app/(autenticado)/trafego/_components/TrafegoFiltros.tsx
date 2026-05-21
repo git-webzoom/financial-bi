@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { SlidersHorizontal, ChevronDown, ChevronUp } from 'lucide-react'
 import SelectBusca from './SelectBusca'
 import type { FiltrosTrafego, MetaAccount } from './TrafegoClient'
 import type { FiltroPersonalizado } from '@/lib/filtros-personalizados'
@@ -28,6 +29,7 @@ const inputStyle: React.CSSProperties = {
   padding: '0.5rem 0.75rem',
   fontSize: '0.875rem',
   outline: 'none',
+  width: '100%',
 }
 
 export default function TrafegoFiltros({
@@ -35,39 +37,49 @@ export default function TrafegoFiltros({
   filtrosSalvos, filtroSalvoAtivo, onFiltroSalvo, onLimpar, semanas,
 }: Props) {
   const [semanaVal, setSemanaVal] = useState('')
+  const [aberto, setAberto] = useState(false)
+
   const opcoesContas    = metaAccounts.map(a => ({ value: a.account_id, label: a.nome }))
   const opcoesCampanhas = campanhas.map(c => ({ value: c, label: c }))
   const opcoesAdsets    = adsets.map(a => ({ value: a, label: a }))
 
-  return (
-    <div
-      className="rounded-xl px-5 py-4"
-      style={{ backgroundColor: '#111111', border: '1px solid #222222' }}
-    >
-      <div className="flex flex-wrap gap-3 items-end">
+  const contAtivos = [
+    !!filtros.conta,
+    !!filtros.campanha,
+    !!filtros.adset,
+    !!filtroSalvoAtivo,
+    !!semanaVal,
+  ].filter(Boolean).length
+
+  // Conteúdo dos filtros (compartilhado entre desktop inline e mobile expandido)
+  function FiltrosConteudo({ coluna }: { coluna?: boolean }) {
+    return (
+      <div className={coluna ? 'flex flex-col gap-3' : 'flex flex-wrap gap-3 items-end'}>
 
         {/* Date range */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Data início</label>
-          <input
-            type="date"
-            value={filtros.inicio}
-            onChange={e => onChange({ inicio: e.target.value })}
-            style={inputStyle}
-            onFocus={e => (e.target.style.borderColor = '#C9A84C')}
-            onBlur={e => (e.target.style.borderColor = '#222222')}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Data fim</label>
-          <input
-            type="date"
-            value={filtros.fim}
-            onChange={e => onChange({ fim: e.target.value })}
-            style={inputStyle}
-            onFocus={e => (e.target.style.borderColor = '#C9A84C')}
-            onBlur={e => (e.target.style.borderColor = '#222222')}
-          />
+        <div className={coluna ? 'grid grid-cols-2 gap-2' : 'flex gap-2'}>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Data início</label>
+            <input
+              type="date"
+              value={filtros.inicio}
+              onChange={e => onChange({ inicio: e.target.value })}
+              style={inputStyle}
+              onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+              onBlur={e => (e.target.style.borderColor = '#222222')}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Data fim</label>
+            <input
+              type="date"
+              value={filtros.fim}
+              onChange={e => onChange({ fim: e.target.value })}
+              style={inputStyle}
+              onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+              onBlur={e => (e.target.style.borderColor = '#222222')}
+            />
+          </div>
         </div>
 
         {semanas && semanas.length > 0 && (
@@ -95,7 +107,6 @@ export default function TrafegoFiltros({
           </div>
         )}
 
-        {/* Conta */}
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Conta de Anúncios</label>
           <SelectBusca
@@ -108,7 +119,6 @@ export default function TrafegoFiltros({
           />
         </div>
 
-        {/* Campanha */}
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Campanha</label>
           <SelectBusca
@@ -121,7 +131,6 @@ export default function TrafegoFiltros({
           />
         </div>
 
-        {/* Conjunto */}
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Conjunto de Anúncios</label>
           <SelectBusca
@@ -134,7 +143,6 @@ export default function TrafegoFiltros({
           />
         </div>
 
-        {/* Filtro salvo */}
         {filtrosSalvos.length > 0 && (
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Filtro salvo</label>
@@ -154,7 +162,6 @@ export default function TrafegoFiltros({
           </div>
         )}
 
-        {/* Limpar */}
         <button
           onClick={() => { setSemanaVal(''); onLimpar() }}
           disabled={carregando}
@@ -175,6 +182,49 @@ export default function TrafegoFiltros({
         {carregando && (
           <span className="text-xs self-center" style={{ color: '#555555' }}>Carregando…</span>
         )}
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className="rounded-xl"
+      style={{ backgroundColor: '#111111', border: '1px solid #222222' }}
+    >
+      {/* Header do card de filtros (mobile: toggle, desktop: inline) */}
+      <div
+        className="flex items-center justify-between px-5 py-3 md:hidden cursor-pointer"
+        style={{ borderBottom: aberto ? '1px solid #222222' : 'none' }}
+        onClick={() => setAberto(v => !v)}
+      >
+        <div className="flex items-center gap-2">
+          <SlidersHorizontal className="w-4 h-4" style={{ color: '#888888' }} />
+          <span className="text-sm font-medium" style={{ color: '#FFFFFF' }}>Filtros</span>
+          {contAtivos > 0 && (
+            <span
+              className="px-1.5 py-0.5 rounded-full text-xs font-bold"
+              style={{ backgroundColor: '#C9A84C', color: '#000000' }}
+            >
+              {contAtivos}
+            </span>
+          )}
+        </div>
+        {aberto
+          ? <ChevronUp className="w-4 h-4" style={{ color: '#888888' }} />
+          : <ChevronDown className="w-4 h-4" style={{ color: '#888888' }} />
+        }
+      </div>
+
+      {/* Mobile expandido */}
+      {aberto && (
+        <div className="md:hidden px-5 py-4">
+          <FiltrosConteudo coluna />
+        </div>
+      )}
+
+      {/* Desktop inline (sempre visível) */}
+      <div className="hidden md:block px-5 py-4">
+        <FiltrosConteudo />
       </div>
     </div>
   )

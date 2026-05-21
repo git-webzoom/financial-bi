@@ -1,6 +1,6 @@
-export default function Loading() {
+﻿export default function Loading() {
   return (
-    <div className="p-6 space-y-5 animate-pulse">
+    <div className="p-4 md:p-6 space-y-5 animate-pulse">
       <div className="h-6 w-32 rounded-lg" style={{ backgroundColor: '#1A1A1A' }} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

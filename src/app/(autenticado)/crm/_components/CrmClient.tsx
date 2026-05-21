@@ -189,7 +189,7 @@ export default function CrmClient({ semanaAtual, semanaInicial, periodoInicial }
   }, [inscritos, filtros])
 
   return (
-    <div className="p-6 space-y-5" style={{ backgroundColor: '#0A0A0A', minHeight: '100vh' }}>
+    <div className="p-4 md:p-6 space-y-5" style={{ backgroundColor: '#0A0A0A', minHeight: '100vh' }}>
 
       <SeletorSemana
         semana={semana}

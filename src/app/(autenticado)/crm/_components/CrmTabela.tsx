@@ -58,71 +58,76 @@ export default function CrmTabela({ inscritos, carregando, onSelecionar }: Props
 
   return (
     <div>
-      {/* Cabeçalho */}
-      <div
-        className="grid text-xs font-semibold uppercase tracking-wide px-5 py-2"
-        style={{
-          color: '#555555',
-          borderBottom: '1px solid #1E1E1E',
-          gridTemplateColumns: '2fr 2fr 1.2fr 1fr 1.5fr 0.8fr 0.6fr 1.2fr 0.8fr',
-          gap: '0.5rem',
-        }}
-      >
-        <span>Nome</span>
-        <span>Email</span>
-        <span>Cadastro</span>
-        <span>Source</span>
-        <span>Campaign</span>
-        <span>Medium</span>
-        <span>Comprou</span>
-        <span>Outras Semanas</span>
-        <span>Temp.</span>
-      </div>
+      {/* Wrapper com scroll horizontal — essencial no mobile */}
+      <div className="overflow-x-auto">
+        <div style={{ minWidth: 820 }}>
+          {/* Cabeçalho */}
+          <div
+            className="grid text-xs font-semibold uppercase tracking-wide px-5 py-2"
+            style={{
+              color: '#555555',
+              borderBottom: '1px solid #1E1E1E',
+              gridTemplateColumns: '2fr 2fr 1.2fr 1fr 1.5fr 0.8fr 0.6fr 1.2fr 0.8fr',
+              gap: '0.5rem',
+            }}
+          >
+            <span>Nome</span>
+            <span>Email</span>
+            <span>Cadastro</span>
+            <span>Source</span>
+            <span>Campaign</span>
+            <span>Medium</span>
+            <span>Comprou</span>
+            <span>Outras Semanas</span>
+            <span>Temp.</span>
+          </div>
 
-      {/* Linhas */}
-      {pagAtual.map((i) => (
-        <div
-          key={i.id}
-          className="grid px-5 py-3 cursor-pointer"
-          style={{
-            borderBottom: '1px solid #1E1E1E',
-            gridTemplateColumns: '2fr 2fr 1.2fr 1fr 1.5fr 0.8fr 0.6fr 1.2fr 0.8fr',
-            gap: '0.5rem',
-            alignItems: 'center',
-          }}
-          onClick={() => onSelecionar(i)}
-          onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#141414'}
-          onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}
-        >
-          <span className="text-sm font-medium truncate" style={{ color: '#FFFFFF' }}>{i.nome || '—'}</span>
-          <span className="text-sm truncate" style={{ color: '#888888' }}>{i.email}</span>
-          <span className="text-xs" style={{ color: '#888888' }}>{formatData(i.data_cadastro)}</span>
-          <span className="text-xs truncate" style={{ color: '#888888' }}>{i.utm_source || '—'}</span>
-          <span className="text-xs truncate" style={{ color: '#888888' }}>{i.utm_campaign || '—'}</span>
-          <span className="text-xs truncate" style={{ color: '#888888' }}>{i.utm_medium || '—'}</span>
-          <span>
-            {i.comprou
-              ? <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#0F2A1A', color: '#4ADE80' }}>✓ Sim</span>
-              : <span style={{ color: '#555555' }}>—</span>
-            }
-          </span>
-          <span className="flex flex-wrap gap-1">
-            {i.outras_semanas.slice(0, 5).map(s => (
-              <span
-                key={s}
-                className="inline-block px-1.5 py-0.5 rounded text-xs"
-                style={{ backgroundColor: '#1A1A1A', color: '#888888' }}
-              >
-                {s}
+          {/* Linhas */}
+          {pagAtual.map((i) => (
+            <div
+              key={i.id}
+              className="grid px-5 py-3 cursor-pointer"
+              style={{
+                borderBottom: '1px solid #1E1E1E',
+                gridTemplateColumns: '2fr 2fr 1.2fr 1fr 1.5fr 0.8fr 0.6fr 1.2fr 0.8fr',
+                gap: '0.5rem',
+                alignItems: 'center',
+              }}
+              onClick={() => onSelecionar(i)}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#141414'}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}
+            >
+              <span className="text-sm font-medium truncate" style={{ color: '#FFFFFF' }}>{i.nome || '—'}</span>
+              <span className="text-sm truncate" style={{ color: '#888888' }}>{i.email}</span>
+              <span className="text-xs" style={{ color: '#888888' }}>{formatData(i.data_cadastro)}</span>
+              <span className="text-xs truncate" style={{ color: '#888888' }}>{i.utm_source || '—'}</span>
+              <span className="text-xs truncate" style={{ color: '#888888' }}>{i.utm_campaign || '—'}</span>
+              <span className="text-xs truncate" style={{ color: '#888888' }}>{i.utm_medium || '—'}</span>
+              <span>
+                {i.comprou
+                  ? <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#0F2A1A', color: '#4ADE80' }}>✓ Sim</span>
+                  : <span style={{ color: '#555555' }}>—</span>
+                }
               </span>
-            ))}
-            {i.outras_semanas.length > 5 && (
-              <span className="text-xs" style={{ color: '#555555' }}>…</span>
-            )}
-          </span>
-          <BadgeTemperatura temp={i.temperatura} />
+              <span className="flex flex-wrap gap-1">
+                {i.outras_semanas.slice(0, 5).map(s => (
+                  <span
+                    key={s}
+                    className="inline-block px-1.5 py-0.5 rounded text-xs"
+                    style={{ backgroundColor: '#1A1A1A', color: '#888888' }}
+                  >
+                    {s}
+                  </span>
+                ))}
+                {i.outras_semanas.length > 5 && (
+                  <span className="text-xs" style={{ color: '#555555' }}>…</span>
+                )}
+              </span>
+              <BadgeTemperatura temp={i.temperatura} />
+            </div>
+          ))}
         </div>
-      ))}
+      </div>
 
       {/* Paginação */}
       {totalPaginas > 1 && (
@@ -137,7 +142,7 @@ export default function CrmTabela({ inscritos, carregando, onSelecionar }: Props
             <button
               onClick={() => setPagina(p => p - 1)}
               disabled={pagina === 0}
-              className="p-1.5 rounded-lg disabled:opacity-30 transition-colors"
+              className="p-2.5 rounded-lg disabled:opacity-30 transition-colors"
               style={{ color: '#888888' }}
               onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#FFFFFF'}
               onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#888888'}
@@ -147,7 +152,7 @@ export default function CrmTabela({ inscritos, carregando, onSelecionar }: Props
             <button
               onClick={() => setPagina(p => p + 1)}
               disabled={pagina >= totalPaginas - 1}
-              className="p-1.5 rounded-lg disabled:opacity-30 transition-colors"
+              className="p-2.5 rounded-lg disabled:opacity-30 transition-colors"
               style={{ color: '#888888' }}
               onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#FFFFFF'}
               onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#888888'}

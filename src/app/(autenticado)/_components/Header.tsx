@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import { Menu } from 'lucide-react'
 
 const titulos: Record<string, string> = {
   '/dashboard':     'Dashboard',
@@ -14,9 +15,10 @@ const titulos: Record<string, string> = {
 
 interface HeaderProps {
   nomeUsuario: string
+  onAbrirMenu: () => void
 }
 
-export default function Header({ nomeUsuario }: HeaderProps) {
+export default function Header({ nomeUsuario, onAbrirMenu }: HeaderProps) {
   const pathname = usePathname()
 
   const titulo =
@@ -32,10 +34,29 @@ export default function Header({ nomeUsuario }: HeaderProps) {
 
   return (
     <header
-      className="flex items-center justify-between px-8 py-4"
+      className="flex items-center justify-between px-4 md:px-8 py-4"
       style={{ backgroundColor: '#111111', borderBottom: '1px solid #1E1E1E' }}
     >
-      <h1 className="text-xl font-bold" style={{ color: '#FFFFFF' }}>{titulo}</h1>
+      <div className="flex items-center gap-3">
+        {/* Hamburger — só aparece no mobile */}
+        <button
+          className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg transition-colors"
+          onClick={onAbrirMenu}
+          style={{ color: '#888888' }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'
+            ;(e.currentTarget as HTMLElement).style.color = '#FFFFFF'
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
+            ;(e.currentTarget as HTMLElement).style.color = '#888888'
+          }}
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+        <h1 className="text-lg md:text-xl font-bold" style={{ color: '#FFFFFF' }}>{titulo}</h1>
+      </div>
+
       <div className="flex items-center gap-3">
         <span className="text-sm hidden sm:block" style={{ color: '#888888' }}>{nomeUsuario}</span>
         <div
