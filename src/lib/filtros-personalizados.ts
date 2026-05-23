@@ -46,3 +46,18 @@ export const OPERADORES: { value: Operador; label: string }[] = [
   { value: 'maior_que',  label: 'maior que'  },
   { value: 'menor_que',  label: 'menor que'  },
 ]
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function aplicarRegras(q: any, regras: RegraFiltro[]): any {
+  for (const { campo, operador, valor } of regras) {
+    switch (operador) {
+      case 'contem':     q = q.ilike(campo, `%${valor}%`); break
+      case 'nao_contem': q = q.not(campo, 'ilike', `%${valor}%`); break
+      case 'igual':      q = q.eq(campo, valor); break
+      case 'comeca_com': q = q.ilike(campo, `${valor}%`); break
+      case 'maior_que':  q = q.filter(`${campo}::int`, 'gt', valor); break
+      case 'menor_que':  q = q.filter(`${campo}::int`, 'lt', valor); break
+    }
+  }
+  return q
+}

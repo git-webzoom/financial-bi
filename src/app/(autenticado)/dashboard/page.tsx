@@ -1,54 +1,48 @@
-import { DollarSign, ShoppingCart, TrendingUp, Zap } from 'lucide-react'
+'use client'
 
-const kpis = [
-  { label: 'Faturamento Bruto', valor: 'R$ 0,00',  icon: DollarSign },
-  { label: 'Total de Vendas',   valor: '0',         icon: ShoppingCart },
-  { label: 'Total Investido',   valor: 'R$ 0,00',  icon: TrendingUp },
-  { label: 'ROAS',              valor: '0,00x',     icon: Zap },
-]
+import { useState } from 'react'
+import TpwClient from './_components/TpwClient'
+
+type Aba = 'webnario' | 'tpw'
 
 export default function DashboardPage() {
+  const [abaAtiva, setAbaAtiva] = useState<Aba>('webnario')
+
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-6 space-y-6">
 
-      {/* Cards KPI */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-        {kpis.map(({ label, valor, icon: Icon }) => (
-          <div
-            key={label}
-            className="rounded-xl p-6"
-            style={{ backgroundColor: '#111111', border: '1px solid #222222' }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>{label}</span>
-              <div
-                className="w-9 h-9 rounded-lg flex items-center justify-center"
-                style={{ backgroundColor: '#C9A84C1A' }}
-              >
-                <Icon className="w-5 h-5" style={{ color: '#C9A84C' }} />
-              </div>
-            </div>
-            <p className="text-2xl font-bold" style={{ color: '#FFFFFF' }}>{valor}</p>
-          </div>
-        ))}
+      {/* Abas */}
+      <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
+        {(['webnario', 'tpw'] as Aba[]).map((aba) => {
+          const label = aba === 'webnario' ? 'Webnário' : 'TPW'
+          const ativo = abaAtiva === aba
+          return (
+            <button
+              key={aba}
+              onClick={() => setAbaAtiva(aba)}
+              className="px-5 py-2 rounded-lg text-sm font-medium transition-all"
+              style={{
+                backgroundColor: ativo ? '#C9A84C' : 'transparent',
+                color: ativo ? '#0A0A0A' : '#888888',
+              }}
+            >
+              {label}
+            </button>
+          )
+        })}
       </div>
 
-      {/* Mensagem de estado vazio */}
-      <div
-        className="rounded-xl border-dashed flex flex-col items-center justify-center py-20 px-6 text-center"
-        style={{ backgroundColor: '#111111', border: '1px dashed #222222' }}
-      >
+      {/* Conteúdo das abas */}
+      {abaAtiva === 'webnario' && (
         <div
-          className="w-14 h-14 rounded-full flex items-center justify-center mb-4"
-          style={{ backgroundColor: '#C9A84C1A' }}
+          className="rounded-xl flex flex-col items-center justify-center py-20 px-6 text-center"
+          style={{ backgroundColor: '#111111', border: '1px dashed #222222' }}
         >
-          <Zap className="w-7 h-7" style={{ color: '#C9A84C' }} />
+          <p className="text-sm" style={{ color: '#888888' }}>Conteúdo do Webnário em breve</p>
         </div>
-        <h2 className="text-lg font-semibold mb-2" style={{ color: '#FFFFFF' }}>Nenhum dado disponível</h2>
-        <p className="text-sm max-w-sm" style={{ color: '#888888' }}>
-          Configure as integrações para começar a receber dados e visualizar os indicadores do seu negócio.
-        </p>
-      </div>
+      )}
+
+      {abaAtiva === 'tpw' && <TpwClient />}
 
     </div>
   )
