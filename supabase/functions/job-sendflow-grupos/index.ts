@@ -55,6 +55,70 @@ function delay(ms: number) {
   return new Promise(r => setTimeout(r, ms))
 }
 
+// Busca semana atual (numeração captacao) e ativa campanha Cap-{semana} na Sendflow
+async function autoSelecionarCampanhaCap(headers: Record<string, string>): Promise<string | null> {
+  // Semana atual de captacao
+  const { data: semanaAtual } = await supabase.rpc('get_semana_atual')
+  if (!semanaAtual) {
+    console.warn('[grupos] get_semana_atual retornou null — sem auto-seleção')
+    return null
+  }
+
+  const nomeProcurado = `Cap-${semanaAtual}`
+  console.log(`[grupos] Procurando campanha "${nomeProcurado}" na Sendflow API`)
+
+  // Lista todas as campanhas (releases) disponíveis na Sendflow
+  const res = await fetch(`${BASE_URL}/releases`, { headers })
+  if (!res.ok) {
+    console.error(`[grupos] GET /releases → ${res.status}`)
+    return null
+  }
+
+  const releases = await res.json() as Array<Record<string, unknown>>
+  if (!Array.isArray(releases)) {
+    console.error('[grupos] GET /releases não retornou array')
+    return null
+  }
+
+  // Encontra a campanha cujo nome começa com o padrão Cap-{semana}
+  const campanha = releases.find(r => {
+    const nome = String(r.name ?? '')
+    return nome === nomeProcurado || nome.startsWith(`${nomeProcurado} `) || nome.startsWith(`${nomeProcurado}-`)
+  })
+
+  if (!campanha) {
+    console.warn(`[grupos] Campanha "${nomeProcurado}" não encontrada. Campanhas disponíveis: ${releases.map(r => r.name).join(', ')}`)
+    return null
+  }
+
+  const campanhaId = String(campanha.id ?? '')
+  const campanhaNome = String(campanha.name ?? '')
+  console.log(`[grupos] Encontrada: "${campanhaNome}" (id=${campanhaId})`)
+
+  // Upsert a nova campanha no banco
+  await supabase
+    .from('sendflow_campanhas')
+    .upsert({
+      id: campanhaId,
+      nome: campanhaNome,
+      monitorada: true,
+      ativo: campanha.archived !== true,
+      raw: campanha,
+      synced_at: new Date().toISOString(),
+    }, { onConflict: 'id' })
+
+  // Remove monitorada=true de outras campanhas Cap- da semana anterior
+  // (deixa apenas a atual como monitorada)
+  await supabase
+    .from('sendflow_campanhas')
+    .update({ monitorada: false })
+    .neq('id', campanhaId)
+    .like('nome', 'Cap-%')
+
+  console.log(`[grupos] Campanha "${campanhaNome}" marcada como monitorada`)
+  return campanhaId
+}
+
 Deno.serve(async () => {
   const token = await getToken()
   if (!token) {
@@ -63,6 +127,10 @@ Deno.serve(async () => {
   }
 
   const headers = { Authorization: `Bearer ${token}` }
+
+  // Auto-seleciona campanha Cap-{semana_atual} antes de sincronizar grupos
+  await autoSelecionarCampanhaCap(headers)
+  await delay(300)
 
   // Só campanhas que o usuário marcou para monitorar
   const { data: campanhas, error: campErr } = await supabase
