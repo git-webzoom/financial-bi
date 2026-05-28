@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { formatMoeda, formatData } from '@/lib/format'
 import VendaDrawer from './VendaDrawer'
 import { Search, X, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react'
+import { aplicarRegras } from '@/lib/filtros-personalizados'
 import type { FiltroPersonalizado, RegraFiltro } from '@/lib/filtros-personalizados'
 interface SemanaOpcao { numero: number; inicio: string; fim: string }
 
@@ -272,20 +273,6 @@ const selectStyle: React.CSSProperties = {
   outline: 'none',
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function aplicarRegras(q: any, regras: RegraFiltro[]) {
-  for (const { campo, operador, valor } of regras) {
-    switch (operador) {
-      case 'contem':     q = q.ilike(campo, `%${valor}%`); break
-      case 'nao_contem': q = q.not(campo, 'ilike', `%${valor}%`); break
-      case 'igual':      q = q.eq(campo, valor); break
-      case 'comeca_com': q = q.ilike(campo, `${valor}%`); break
-      case 'maior_que':  q = q.filter(`${campo}::int`, 'gt', valor); break
-      case 'menor_que':  q = q.filter(`${campo}::int`, 'lt', valor); break
-    }
-  }
-  return q
-}
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
