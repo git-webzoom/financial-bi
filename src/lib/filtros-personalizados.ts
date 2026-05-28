@@ -55,8 +55,8 @@ export function aplicarRegras(q: any, regras: RegraFiltro[]): any {
       case 'nao_contem': q = q.not(campo, 'ilike', `%${valor}%`); break
       case 'igual':      q = q.eq(campo, valor); break
       case 'comeca_com': q = q.ilike(campo, `${valor}%`); break
-      case 'maior_que':  q = q.filter(`${campo}::int`, 'gt', valor); break
-      case 'menor_que':  q = q.filter(`${campo}::int`, 'lt', valor); break
+      case 'maior_que':  q = q.gt(campo, Number(valor)); break
+      case 'menor_que':  q = q.lt(campo, Number(valor)); break
     }
   }
   return q
