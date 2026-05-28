@@ -1,4 +1,4 @@
-export type Operador = 'contem' | 'nao_contem' | 'igual' | 'comeca_com' | 'maior_que' | 'menor_que'
+export type Operador = 'contem' | 'nao_contem' | 'igual' | 'comeca_com' | 'maior_que' | 'menor_que' | 'maior_igual' | 'menor_igual'
 export type Modulo   = 'trafego' | 'vendas'
 
 export interface RegraFiltro {
@@ -39,24 +39,29 @@ export const CAMPOS_POR_MODULO: Record<Modulo, { value: string; label: string }[
 }
 
 export const OPERADORES: { value: Operador; label: string }[] = [
-  { value: 'contem',     label: 'contém'     },
-  { value: 'nao_contem', label: 'não contém' },
-  { value: 'igual',      label: 'igual a'    },
-  { value: 'comeca_com', label: 'começa com' },
-  { value: 'maior_que',  label: 'maior que'  },
-  { value: 'menor_que',  label: 'menor que'  },
+  { value: 'contem',      label: 'contém'          },
+  { value: 'nao_contem',  label: 'não contém'      },
+  { value: 'igual',       label: 'igual a'         },
+  { value: 'comeca_com',  label: 'começa com'      },
+  { value: 'maior_que',   label: 'maior que'       },
+  { value: 'maior_igual', label: 'maior ou igual a'},
+  { value: 'menor_que',   label: 'menor que'       },
+  { value: 'menor_igual', label: 'menor ou igual a'},
 ]
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function aplicarRegras(q: any, regras: RegraFiltro[]): any {
   for (const { campo, operador, valor } of regras) {
+    const n = Number(valor)
     switch (operador) {
-      case 'contem':     q = q.ilike(campo, `%${valor}%`); break
-      case 'nao_contem': q = q.not(campo, 'ilike', `%${valor}%`); break
-      case 'igual':      q = q.eq(campo, valor); break
-      case 'comeca_com': q = q.ilike(campo, `${valor}%`); break
-      case 'maior_que':  q = q.gt(campo, Number(valor)); break
-      case 'menor_que':  q = q.or(`${campo}.lt.${Number(valor)},${campo}.is.null`); break
+      case 'contem':      q = q.ilike(campo, `%${valor}%`); break
+      case 'nao_contem':  q = q.not(campo, 'ilike', `%${valor}%`); break
+      case 'igual':       q = q.eq(campo, valor); break
+      case 'comeca_com':  q = q.ilike(campo, `${valor}%`); break
+      case 'maior_que':   q = q.gt(campo, n); break
+      case 'maior_igual': q = q.gte(campo, n); break
+      case 'menor_que':   q = q.lt(campo, n); break
+      case 'menor_igual': q = q.lte(campo, n); break
     }
   }
   return q
