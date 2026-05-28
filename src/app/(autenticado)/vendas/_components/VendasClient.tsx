@@ -640,7 +640,7 @@ export default function VendasClient({
 
           {filtrosSalvos.length > 0 && (
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Filtro salvo</label>
+              <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Funil</label>
               <select
                 value={filtroSalvoAtivo}
                 onChange={e => handleFiltroSalvo(e.target.value)}
