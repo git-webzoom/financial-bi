@@ -56,7 +56,7 @@ export function aplicarRegras(q: any, regras: RegraFiltro[]): any {
       case 'igual':      q = q.eq(campo, valor); break
       case 'comeca_com': q = q.ilike(campo, `${valor}%`); break
       case 'maior_que':  q = q.gt(campo, Number(valor)); break
-      case 'menor_que':  q = q.lt(campo, Number(valor)); break
+      case 'menor_que':  q = q.or(`${campo}.lt.${Number(valor)},${campo}.is.null`); break
     }
   }
   return q
