@@ -205,7 +205,7 @@ export default function TpwClient() {
     <div className="space-y-5">
 
       {/* Range de data */}
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-end gap-3 flex-wrap">
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>De</label>
           <input
@@ -213,7 +213,6 @@ export default function TpwClient() {
             value={dataInicio}
             max={dataFim}
             onChange={e => setDataInicio(e.target.value)}
-            onBlur={() => buscarDados(dataInicio, dataFim)}
             style={inputStyle}
           />
         </div>
@@ -225,10 +224,26 @@ export default function TpwClient() {
             min={dataInicio}
             max={hoje()}
             onChange={e => setDataFim(e.target.value)}
-            onBlur={() => buscarDados(dataInicio, dataFim)}
             style={inputStyle}
           />
         </div>
+        <button
+          onClick={() => buscarDados(dataInicio, dataFim)}
+          disabled={carregando}
+          style={{
+            backgroundColor: '#C9A84C',
+            color: '#000000',
+            border: 'none',
+            borderRadius: '0.5rem',
+            padding: '0.5rem 1.25rem',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            cursor: carregando ? 'not-allowed' : 'pointer',
+            opacity: carregando ? 0.6 : 1,
+          }}
+        >
+          Buscar
+        </button>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-5">
