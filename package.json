@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "prepare": "git config core.hooksPath .githooks",
     "import:produtos": "node scripts/import-produtos-ofertas.js"
   },
   "dependencies": {

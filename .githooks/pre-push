@@ -1,0 +1,53 @@
+#!/bin/sh
+# ─────────────────────────────────────────────────────────────────────────────
+# Financial BI — hook pre-push
+# Bloqueia o push se houve mudança de CÓDIGO sem atualizar a documentação.
+# Regra (ver CLAUDE.md): toda mudança em src/, supabase/ ou scripts/ exige
+# atualizar algum arquivo .md em docs/ (idealmente docs/CHANGELOG.md).
+#
+# Ativação (uma vez por máquina):  git config core.hooksPath .githooks
+# (o "npm run prepare" faz isso automaticamente após "npm install")
+# ─────────────────────────────────────────────────────────────────────────────
+
+z40=0000000000000000000000000000000000000000
+fail=0
+
+while read local_ref local_sha remote_ref remote_sha; do
+  # Branch sendo deletada — ignora
+  [ "$local_sha" = "$z40" ] && continue
+
+  if [ "$remote_sha" = "$z40" ]; then
+    # Branch nova no remoto: examina os commits desta branch
+    range="$local_sha"
+  else
+    range="$remote_sha..$local_sha"
+  fi
+
+  changed=$(git diff --name-only "$range" 2>/dev/null)
+  [ -z "$changed" ] && continue
+
+  code_changed=$(echo "$changed" | grep -E '^(src/|supabase/|scripts/)' || true)
+  docs_changed=$(echo "$changed" | grep -E '^docs/.*\.md$' || true)
+
+  if [ -n "$code_changed" ] && [ -z "$docs_changed" ]; then
+    fail=1
+  fi
+done
+
+if [ "$fail" = "1" ]; then
+  echo "" >&2
+  echo "🚫 PUSH BLOQUEADO — documentação não atualizada." >&2
+  echo "" >&2
+  echo "Você alterou código (src/ , supabase/ ou scripts/) mas não atualizou nenhum" >&2
+  echo "arquivo em docs/. Antes de subir:" >&2
+  echo "  1. Atualize o doc da área afetada (ex.: docs/TABELAS.md, docs/EDGE-FUNCTIONS.md)" >&2
+  echo "  2. Adicione uma entrada em docs/CHANGELOG.md" >&2
+  echo "  3. Faça commit dessas mudanças e dê push de novo." >&2
+  echo "" >&2
+  echo "Regras completas: ./CLAUDE.md" >&2
+  echo "(Burlar com --no-verify é proibido por política do projeto.)" >&2
+  echo "" >&2
+  exit 1
+fi
+
+exit 0
