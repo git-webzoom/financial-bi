@@ -14,7 +14,7 @@ A **fonte da verdade é o banco real (Supabase)**, não as migrations locais. Se
 | Documento | O que contém |
 |-----------|--------------|
 | [ARQUITETURA.md](ARQUITETURA.md) | Visão geral, stack, fluxo de dados ponta a ponta |
-| [TABELAS.md](TABELAS.md) | Todas as 26 tabelas do banco, o que cada uma faz |
+| [TABELAS.md](TABELAS.md) | Todas as 29 tabelas do banco, o que cada uma faz |
 | [FUNCOES-SQL.md](FUNCOES-SQL.md) | Funções/RPC e triggers do Postgres |
 | [EDGE-FUNCTIONS.md](EDGE-FUNCTIONS.md) | As 9 Edge Functions (Deno) |
 | [CRONS.md](CRONS.md) | Os 11 agendamentos (pg_cron) ativos |
@@ -30,7 +30,7 @@ A **fonte da verdade é o banco real (Supabase)**, não as migrations locais. Se
 ## Snapshot do sistema (atualizado em 2026-05-31)
 
 - **Stack:** Next.js 14 + Supabase (Postgres + Edge Functions Deno) + Tailwind + Recharts
-- **Tabelas:** 26 · **Funções SQL:** 33 · **Edge Functions:** 9 · **Crons ativos:** 11 · **Rotas API:** 13
+- **Tabelas:** 29 · **Funções SQL:** 33 · **Edge Functions:** 9 · **Crons ativos:** 11 · **Rotas API:** 13
 - **Projeto Supabase:** `zbfcrnsfygovzmncmmjz`
 - **Repositório:** `git-webzoom/financial-bi` (branch `main`)
 

@@ -44,6 +44,8 @@
 | `webinario_semanas_presencas` | 5 | Relação semana ↔ presenças (apoio). |
 | `filtros_personalizados` | 7 | Filtros salvos por módulo (trafego/vendas/...). |
 | `filtros_personalizados_regras` | 7 | Regras de cada filtro salvo. |
+| `dashboard_abas` | 6 | Abas dinâmicas do dashboard. `tipo_mockup` (venda_direta/captacao) define o layout; `ordem`/`ativo`. Nome único (case-insensitive). A aba "Webnário" do dashboard NÃO entra aqui (é fixa no código). |
+| `dashboard_aba_filtros` | 5 | Vínculos aba↔filtro por **papel** ('trafego','vendas', futuros). FK p/ `filtros_personalizados` é `ON DELETE SET NULL`. Único por `(aba_id, papel)`. |
 
 ## Índices relevantes (não-PK)
 - `trafego`: `ad_account_id`, `campaign_name`, `date_ref`; únicos `ad_id+date` e `name+date`.
@@ -52,5 +54,16 @@
 - `crm`: `ac_contact_id`, `contato_id`, `email`, `tags` (GIN).
 - `contatos`: `email` (único), `telefone`, `doc`, `ac_contact_id`.
 - `webinario_inscritos`: `contato`, `semana`, `inscricao`.
+- `dashboard_abas`: único `lower(nome)`, `ordem`.
+- `dashboard_aba_filtros`: `aba_id`; único `(aba_id, papel)`.
 
 > Lista completa de índices: `SELECT tablename, indexname FROM pg_indexes WHERE schemaname='public'`.
+
+## RLS (Row Level Security)
+Todas as tabelas de `public` têm RLS habilitado. Padrão geral: **SELECT** liberado para `authenticated`
+(o frontend lê como usuário logado); **escrita** só por `service_role` (Edge Functions/webhook) ou,
+em tabelas de config, por `admin` (`profiles.perfil='admin'`). Crons que rodam SQL direto executam como
+superuser e ignoram RLS.
+- Em **2026-05-31** o RLS foi habilitado em 5 tabelas que estavam expostas à `anon` key:
+  `grupos_kpis_semana`, `sendflow_metricas`, `webinario_presencas`, `crm_historico_utm`, `sendflow_eventos_grupo`
+  (SELECT `authenticated`; escrita `service_role`). Ver `PENDENCIAS.md` / `CHANGELOG.md`.

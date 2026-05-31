@@ -43,3 +43,6 @@ planilhas/
 
 # mcp config (credenciais locais)
 .mcp.json
+
+# artefatos de teste do playwright (mcp)
+.playwright-mcp/
