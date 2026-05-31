@@ -16,7 +16,17 @@
 
 ---
 
-## [2026-05-31] Habilitar RLS em 5 tabelas expostas — @tiago
+## [2026-05-31] Fix: build do EasyPanel quebrando no script `prepare` — @tiago
+- **O quê:** `package.json` → script `prepare` mudou de `git config core.hooksPath .githooks`
+  para `git config core.hooksPath .githooks || true`.
+- **Por quê:** o build do EasyPanel (Docker/Nixpacks) roda `npm install` num diretório SEM `.git`,
+  então o `prepare` falhava com `fatal: not in a git directory` (exit 128) e **abortava o build inteiro**
+  → a versão nova (abas dinâmicas + RLS) não subia, app continuava na versão antiga. O `|| true` ignora
+  a falha quando não há git (container), mantendo o hook ativo no dev local (onde há git).
+- **Como testou:** `npm run prepare` local (exit 0, hooks configurados) e simulação sem git
+  (`git config ... || true` → exit 0). Pendente: redeploy no EasyPanel confirmar build verde.
+- **Impacto/risco:** baixíssimo; só afeta o passo de configuração de hooks. Destrava o deploy em produção.
+- **Docs atualizados:** CHANGELOG. Ver também PENDENCIAS (Node 18 no EasyPanel; service_role exposta no build).
 - **O quê:** habilitado Row Level Security em `grupos_kpis_semana`, `sendflow_metricas`,
   `webinario_presencas`, `crm_historico_utm`, `sendflow_eventos_grupo` (migration
   `20260531000002_rls_tabelas_expostas.sql`). Policies: SELECT para `authenticated`; INSERT/UPDATE/DELETE

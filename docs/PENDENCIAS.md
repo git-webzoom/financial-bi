@@ -14,6 +14,14 @@
    (`cron.job`) quanto em sobras de comandos no `.claude/settings.json` (já limpo em 2026-05-31).
    Como ficou exposta localmente, o ideal é rotacionar a chave no painel do Supabase e atualizar
    os locais que a usam (`.env.local` de cada dev, headers dos crons). Decisão do responsável.
+   - ⚠️ **2026-05-31:** a `service_role` também aparece em **texto puro no comando de build do EasyPanel**
+     (`--build-arg 'SUPABASE_SERVICE_KEY=...'`) e nos logs de build. Reforça a urgência de **rotacionar**
+     e de migrar esse valor para um secret do EasyPanel em vez de build-arg. Avaliar também se o build
+     realmente precisa da service_role (o front usa a `anon`; a service_role é de runtime/Edge).
+
+3c. **EasyPanel roda Node 18** (`v18.20.5`). O `@supabase/supabase-js@2.105.3` exige Node >= 20
+   (warnings `EBADENGINE` no build) e o Node 18 está deprecado. Hoje builda/roda, mas é dívida:
+   subir a imagem base para Node 20 LTS no EasyPanel (Nixpacks: `NIXPACKS_NODE_VERSION=20` ou config equivalente).
 
 ## 🟡 Dívidas técnicas (sem urgência, sem quebra)
 2. **`getToken()` duplicado** nas Edge Functions (meta-ads, sendflow, activecampaign, manager-guru).
