@@ -2945,7 +2945,7 @@ function AbaDashboardAbas() {
         style={{ backgroundColor: '#111111', border: '1px solid #222222', color: '#888888' }}
       >
         Cada aba vira um dashboard na página inicial. O <span style={{ color: '#C9A84C' }}>tipo de mockup</span> define o layout/métricas;
-        os filtros definem o recorte dos dados. A aba <span style={{ color: '#FFFFFF' }}>Webnário</span> é fixa e não aparece aqui.
+        os filtros definem o recorte dos dados. A aba <span style={{ color: '#FFFFFF' }}>Webinário</span> é fixa e não aparece aqui.
       </div>
 
       {!formAberto && (

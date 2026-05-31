@@ -66,16 +66,16 @@ function Funil({ steps, carregando }: { steps: FunilStep[]; carregando: boolean 
         return (
           <div key={step.label} className="w-full flex flex-col items-center">
             <div
-              className="rounded-xl px-4 py-3 transition-all duration-300"
+              className="rounded-xl px-4 py-3 transition-all duration-300 text-center"
               style={{ width: `${widthPct}%`, backgroundColor: '#111111', border: '1px solid #222222' }}
             >
               <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#666666' }}>
                 {step.label}
               </p>
               {carregando ? (
-                <div className="h-6 w-20 rounded animate-pulse mt-1" style={{ backgroundColor: '#1A1A1A' }} />
+                <div className="h-6 w-20 rounded animate-pulse mt-1 mx-auto" style={{ backgroundColor: '#1A1A1A' }} />
               ) : (
-                <div className="flex items-baseline gap-2 mt-0.5">
+                <div className="flex items-baseline justify-center gap-2 mt-0.5">
                   <p className="text-xl font-bold" style={{ color: '#FFFFFF' }}>{step.formatado}</p>
                   {pctStr !== null && (
                     <p className="text-sm font-semibold" style={{ color: '#C9A84C' }}>{pctStr}</p>
@@ -245,10 +245,10 @@ export default function TpwClient({ filtroTrafegoId = null, filtroVendasId = nul
         </button>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-5">
+      <div className="flex flex-col lg:flex-row lg:items-start gap-5">
 
         {/* KPI Cards — 65% */}
-        <div className="lg:flex-[65] grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <div className="lg:flex-[65] grid grid-cols-2 sm:grid-cols-3 auto-rows-min gap-4">
           {kpis.map(({ label, valor }) => (
             <KpiCard key={label} label={label} valor={valor} carregando={carregando} />
           ))}

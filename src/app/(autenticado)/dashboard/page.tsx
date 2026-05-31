@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { montarAbas } from '@/lib/dashboard-abas'
 import type { DashboardAba } from '@/lib/dashboard-abas'
 import TpwClient from './_components/TpwClient'
+import WebinarioClient from './_components/WebinarioClient'
 
 // Aba "Webnário" é caso à parte (será construída separadamente) — fica fixa,
 // fora da tabela dashboard_abas. As demais abas vêm do banco.
@@ -68,7 +69,7 @@ export default function DashboardPage() {
           className="px-5 py-2 rounded-lg text-sm font-medium transition-all"
           style={botaoEstilo(abaAtivaId === WEBN_KEY)}
         >
-          Webnário
+          Webinário
         </button>
 
         {/* Abas dinâmicas (dashboard_abas) */}
@@ -89,14 +90,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Conteúdo das abas */}
-      {abaAtivaId === WEBN_KEY && (
-        <div
-          className="rounded-xl flex flex-col items-center justify-center py-20 px-6 text-center"
-          style={{ backgroundColor: '#111111', border: '1px dashed #222222' }}
-        >
-          <p className="text-sm" style={{ color: '#888888' }}>Conteúdo do Webnário em breve</p>
-        </div>
-      )}
+      {abaAtivaId === WEBN_KEY && <WebinarioClient />}
 
       {abaAtiva?.tipo_mockup === 'venda_direta' && (
         <TpwClient
