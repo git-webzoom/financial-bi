@@ -28,6 +28,13 @@
    — risco médio: conferir antes se há algum alerta no dashboard que faz parse do texto atual.
 
 ## 🟢 Resolvidos / esclarecidos
+- ✅ **RLS habilitado nas 5 tabelas que estavam expostas à `anon` key** (2026-05-31):
+  `grupos_kpis_semana`, `sendflow_metricas`, `webinario_presencas`, `crm_historico_utm`,
+  `sendflow_eventos_grupo`. Antes, qualquer um com a chave pública lia/escrevia tudo. Agora: SELECT
+  para `authenticated`, escrita só `service_role`. Validado que `/grupos` e `/webnario` continuam lendo
+  e que `anon` passou a ver 0 linhas; advisor de segurança zerou os erros `rls_disabled_in_public`.
+  (As 2 tabelas que um relatório dizia estarem "dropadas" — `crm_historico_utm`, `sendflow_eventos_grupo` —
+  na verdade existem e recebem escrita: mais um caso de migration ≠ banco real.)
 - ✅ `trafego_reach` **existe** no banco (113+ linhas) e o KPI "Alcance" funciona. (Um relatório antigo
   dizia que a tabela não existia — era erro de ter olhado só as migrations, não o banco real.)
 - ✅ Existem **11 crons ativos** (pg_cron) — não é verdade que "não há agendamentos".

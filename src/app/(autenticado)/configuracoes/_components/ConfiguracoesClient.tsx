@@ -10,6 +10,8 @@ import {
 } from 'lucide-react'
 import type { FiltroPersonalizado, RegraFiltro, Modulo, Operador } from '@/lib/filtros-personalizados'
 import { CAMPOS_POR_MODULO, OPERADORES } from '@/lib/filtros-personalizados'
+import type { DashboardAba, TipoMockup, PapelFiltro } from '@/lib/dashboard-abas'
+import { PAPEIS_POR_MOCKUP, TIPOS_MOCKUP, montarAbas } from '@/lib/dashboard-abas'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -77,7 +79,7 @@ const WEBHOOK_TABELAS = [
   { tabela: 'raw_vendas', label: 'Manager Guru — Vendas' },
 ]
 
-type Aba = 'integracoes' | 'manager_guru' | 'meta_ads' | 'activecampaign' | 'sendflow' | 'usuarios' | 'filtros' | 'semanas'
+type Aba = 'integracoes' | 'manager_guru' | 'meta_ads' | 'activecampaign' | 'sendflow' | 'usuarios' | 'filtros' | 'dashboard_abas' | 'semanas'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -2759,6 +2761,419 @@ function AbaFiltrosPersonalizados() {
   )
 }
 
+// ─── Aba Abas do Dashboard ────────────────────────────────────────────────────
+
+interface FiltroOpcao { id: string; nome: string; modulo: string }
+
+function AbaDashboardAbas() {
+  const supabase = createClient()
+
+  const [abas,        setAbas]        = useState<DashboardAba[]>([])
+  const [filtros,     setFiltros]     = useState<FiltroOpcao[]>([])
+  const [carregando,  setCarregando]  = useState(true)
+  const [msg,         setMsg]         = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [editando,    setEditando]    = useState<DashboardAba | null>(null)
+  const [formAberto,  setFormAberto]  = useState(false)
+  const [formNome,    setFormNome]    = useState('')
+  const [formTipo,    setFormTipo]    = useState<TipoMockup>('venda_direta')
+  const [formOrdem,   setFormOrdem]   = useState(0)
+  const [formFiltros, setFormFiltros] = useState<Record<string, string>>({}) // papel -> filtro_id ('' = nenhum)
+  const [salvando,    setSalvando]    = useState(false)
+  const [removendoId, setRemovendoId] = useState<string | null>(null)
+
+  const inputStyle: React.CSSProperties = {
+    backgroundColor: '#0A0A0A',
+    border: '1px solid #333333',
+    color: '#FFFFFF',
+    borderRadius: '0.5rem',
+    padding: '0.5rem 0.75rem',
+    fontSize: '0.875rem',
+    outline: 'none',
+  }
+
+  async function carregar() {
+    setCarregando(true)
+    const [{ data: abasRaw }, { data: filtrosRaw }] = await Promise.all([
+      supabase.from('dashboard_abas')
+        .select('id, nome, tipo_mockup, ordem, ativo')
+        .order('ordem').order('nome'),
+      supabase.from('filtros_personalizados')
+        .select('id, nome, modulo').eq('ativo', true).order('nome'),
+    ])
+
+    const ids = (abasRaw ?? []).map(a => a.id)
+    const { data: vincRaw } = ids.length > 0
+      ? await supabase.from('dashboard_aba_filtros')
+          .select('aba_id, papel, filtro_id').in('aba_id', ids)
+      : { data: [] }
+
+    setAbas(montarAbas(abasRaw ?? [], vincRaw ?? []))
+    setFiltros(filtrosRaw ?? [])
+    setCarregando(false)
+  }
+
+  useEffect(() => { carregar() }, [])
+
+  function abrirCriacao() {
+    setEditando(null)
+    setFormNome('')
+    setFormTipo('venda_direta')
+    setFormOrdem(abas.length + 1)
+    setFormFiltros({})
+    setFormAberto(true)
+  }
+
+  function abrirEdicao(a: DashboardAba) {
+    setEditando(a)
+    setFormNome(a.nome)
+    setFormTipo(a.tipo_mockup)
+    setFormOrdem(a.ordem)
+    const f: Record<string, string> = {}
+    for (const v of a.vinculos) f[v.papel] = v.filtro_id ?? ''
+    setFormFiltros(f)
+    setFormAberto(true)
+  }
+
+  // Vínculos (papel -> filtro_id) a persistir, conforme o tipo selecionado.
+  function vinculosDoForm(abaId: string) {
+    return PAPEIS_POR_MOCKUP[formTipo]
+      .filter(p => formFiltros[p.papel])
+      .map(p => ({ aba_id: abaId, papel: p.papel, filtro_id: formFiltros[p.papel] }))
+  }
+
+  async function salvar() {
+    if (!formNome.trim()) { setMsg({ type: 'err', text: 'Informe um nome para a aba.' }); return }
+
+    setSalvando(true)
+    setMsg(null)
+
+    try {
+      if (editando) {
+        const { error: errAba } = await supabase
+          .from('dashboard_abas')
+          .update({ nome: formNome.trim(), tipo_mockup: formTipo, ordem: formOrdem, updated_at: new Date().toISOString() })
+          .eq('id', editando.id)
+        if (errAba) throw new Error(traduzErro(errAba))
+
+        await supabase.from('dashboard_aba_filtros').delete().eq('aba_id', editando.id)
+        const vinc = vinculosDoForm(editando.id)
+        if (vinc.length) {
+          const { error: errVinc } = await supabase.from('dashboard_aba_filtros').insert(vinc)
+          if (errVinc) throw new Error(traduzErro(errVinc))
+        }
+        setMsg({ type: 'ok', text: 'Aba atualizada com sucesso.' })
+      } else {
+        const { data: novaAba, error: errAba } = await supabase
+          .from('dashboard_abas')
+          .insert({ nome: formNome.trim(), tipo_mockup: formTipo, ordem: formOrdem })
+          .select('id')
+          .single()
+        if (errAba || !novaAba) throw new Error(traduzErro(errAba) ?? 'Erro ao criar aba.')
+
+        const vinc = vinculosDoForm(novaAba.id)
+        if (vinc.length) {
+          const { error: errVinc } = await supabase.from('dashboard_aba_filtros').insert(vinc)
+          if (errVinc) throw new Error(traduzErro(errVinc))
+        }
+        setMsg({ type: 'ok', text: 'Aba criada com sucesso.' })
+      }
+
+      setFormAberto(false)
+      await carregar()
+    } catch (e: unknown) {
+      setMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro desconhecido.' })
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  function traduzErro(error: { code?: string; message: string } | null): string {
+    if (!error) return ''
+    if (error.code === '23505') return 'Já existe uma aba com esse nome.'
+    return error.message
+  }
+
+  async function remover(id: string, nome: string) {
+    if (!confirm(`Remover a aba "${nome}"? Esta ação não pode ser desfeita.`)) return
+    setRemovendoId(id)
+    const { error } = await supabase.from('dashboard_abas').delete().eq('id', id)
+    if (error) {
+      setMsg({ type: 'err', text: error.message })
+    } else {
+      setAbas(prev => prev.filter(a => a.id !== id))
+    }
+    setRemovendoId(null)
+  }
+
+  async function toggleAtivo(a: DashboardAba) {
+    await supabase.from('dashboard_abas').update({ ativo: !a.ativo }).eq('id', a.id)
+    setAbas(prev => prev.map(x => x.id === a.id ? { ...x, ativo: !x.ativo } : x))
+  }
+
+  function nomeFiltro(id: string | null | undefined): string {
+    if (!id) return 'sem filtro (soma tudo)'
+    return filtros.find(f => f.id === id)?.nome ?? 'filtro removido'
+  }
+
+  const tipoLabel = (t: TipoMockup) => TIPOS_MOCKUP.find(x => x.value === t)?.label ?? t
+
+  return (
+    <div className="space-y-6">
+
+      {msg && (
+        <div
+          className="px-4 py-3 rounded-lg text-sm flex items-center gap-2"
+          style={{
+            backgroundColor: msg.type === 'ok' ? '#0F2A1A' : '#2A0F0F',
+            color:            msg.type === 'ok' ? '#4ADE80' : '#F87171',
+            border:           `1px solid ${msg.type === 'ok' ? '#4ADE8033' : '#F8717133'}`,
+          }}
+        >
+          {msg.type === 'ok'
+            ? <CheckCircle className="w-4 h-4 shrink-0" />
+            : <XCircle     className="w-4 h-4 shrink-0" />
+          }
+          {msg.text}
+          <button onClick={() => setMsg(null)} className="ml-auto" style={{ color: 'inherit', opacity: 0.6 }}>
+            <XCircle className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      <div
+        className="px-4 py-3 rounded-lg text-xs"
+        style={{ backgroundColor: '#111111', border: '1px solid #222222', color: '#888888' }}
+      >
+        Cada aba vira um dashboard na página inicial. O <span style={{ color: '#C9A84C' }}>tipo de mockup</span> define o layout/métricas;
+        os filtros definem o recorte dos dados. A aba <span style={{ color: '#FFFFFF' }}>Webnário</span> é fixa e não aparece aqui.
+      </div>
+
+      {!formAberto && (
+        <div className="flex justify-end">
+          <button
+            onClick={abrirCriacao}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg"
+            style={{ backgroundColor: '#C9A84C', color: '#000000' }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A'}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C'}
+          >
+            <Plus className="w-4 h-4" />
+            Nova Aba
+          </button>
+        </div>
+      )}
+
+      {formAberto && (
+        <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
+          <div className="px-5 py-4" style={{ borderBottom: '1px solid #1E1E1E' }}>
+            <p className="font-semibold" style={{ color: '#FFFFFF' }}>
+              {editando ? 'Editar aba' : 'Nova aba'}
+            </p>
+          </div>
+
+          <div className="px-5 py-4 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="flex flex-col gap-1 sm:col-span-1">
+                <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Nome da aba</label>
+                <input
+                  type="text"
+                  value={formNome}
+                  onChange={e => setFormNome(e.target.value)}
+                  placeholder="Ex: LNCH PAGO"
+                  style={{ ...inputStyle, width: '100%' }}
+                  onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                  onBlur={e => (e.target.style.borderColor = '#333333')}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Tipo de mockup</label>
+                <select
+                  value={formTipo}
+                  onChange={e => { setFormTipo(e.target.value as TipoMockup); setFormFiltros({}) }}
+                  style={{ ...inputStyle, width: '100%' }}
+                  onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                  onBlur={e => (e.target.style.borderColor = '#333333')}
+                >
+                  {TIPOS_MOCKUP.map(t => (
+                    <option key={t.value} value={t.value} disabled={!t.disponivel}>
+                      {t.label}{t.disponivel ? '' : ' (em breve)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Ordem</label>
+                <input
+                  type="number"
+                  value={formOrdem}
+                  onChange={e => setFormOrdem(Number(e.target.value))}
+                  style={{ ...inputStyle, width: '100%' }}
+                  onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                  onBlur={e => (e.target.style.borderColor = '#333333')}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Filtros</p>
+              {PAPEIS_POR_MOCKUP[formTipo].length === 0 ? (
+                <p className="text-xs" style={{ color: '#555555' }}>Este tipo de mockup ainda não tem filtros configuráveis.</p>
+              ) : (
+                PAPEIS_POR_MOCKUP[formTipo].map(p => (
+                  <div key={p.papel} className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm" style={{ color: '#888888', minWidth: '140px' }}>{p.label}</span>
+                    <select
+                      value={formFiltros[p.papel] ?? ''}
+                      onChange={e => setFormFiltros(prev => ({ ...prev, [p.papel]: e.target.value }))}
+                      style={{ ...inputStyle, flex: '1', minWidth: '200px' }}
+                      onFocus={e => (e.target.style.borderColor = '#C9A84C')}
+                      onBlur={e => (e.target.style.borderColor = '#333333')}
+                    >
+                      <option value="">— Nenhum (soma tudo) —</option>
+                      {filtros.filter(f => f.modulo === p.modulo).map(f => (
+                        <option key={f.id} value={f.id}>{f.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={salvar}
+                disabled={salvando}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg disabled:opacity-50"
+                style={{ backgroundColor: '#C9A84C', color: '#000000' }}
+                onMouseEnter={e => { if (!salvando) (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A' }}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C'}
+              >
+                {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {editando ? 'Salvar alterações' : 'Criar aba'}
+              </button>
+              <button
+                onClick={() => setFormAberto(false)}
+                className="px-4 py-2 text-sm rounded-lg"
+                style={{ border: '1px solid #333333', color: '#888888', backgroundColor: 'transparent' }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {carregando ? (
+        <div className="flex items-center justify-center py-12 gap-2" style={{ color: '#555555' }}>
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span className="text-sm">Carregando abas...</span>
+        </div>
+      ) : abas.length === 0 ? (
+        <div
+          className="rounded-xl border-dashed flex flex-col items-center justify-center py-16"
+          style={{ border: '1px dashed #222222' }}
+        >
+          <p className="text-sm" style={{ color: '#555555' }}>Nenhuma aba criada ainda.</p>
+          <p className="text-xs mt-1" style={{ color: '#444444' }}>Clique em &quot;Nova Aba&quot; para começar.</p>
+        </div>
+      ) : (
+        <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
+          <div className="px-5 py-4" style={{ borderBottom: '1px solid #1E1E1E' }}>
+            <p className="font-semibold" style={{ color: '#FFFFFF' }}>Abas</p>
+            <p className="text-xs mt-0.5" style={{ color: '#555555' }}>{abas.length} aba{abas.length !== 1 ? 's' : ''}</p>
+          </div>
+
+          <div>
+            {abas.map(a => (
+              <div key={a.id} className="px-5 py-4" style={{ borderBottom: '1px solid #1A1A1A' }}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium" style={{ color: '#FFFFFF' }}>{a.nome}</p>
+                      <span className="px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: '#1A1A1A', color: '#C9A84C' }}>{tipoLabel(a.tipo_mockup)}</span>
+                      {a.ativo
+                        ? <span className="px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: '#0F2A1A', color: '#4ADE80' }}>Ativo</span>
+                        : <span className="px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: '#1A1A1A', color: '#888888' }}>Inativo</span>
+                      }
+                      <span className="text-xs" style={{ color: '#444444' }}>ordem {a.ordem}</span>
+                    </div>
+
+                    <div className="mt-2 space-y-1">
+                      {PAPEIS_POR_MOCKUP[a.tipo_mockup].map(p => (
+                        <p key={p.papel} className="text-xs" style={{ color: '#555555' }}>
+                          <span style={{ color: '#888888' }}>{p.label}:</span>
+                          {' '}<span style={{ color: '#FFFFFF' }}>{nomeFiltro(a.filtrosPorPapel[p.papel as PapelFiltro])}</span>
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => abrirEdicao(a)}
+                      title="Editar"
+                      className="p-1.5 rounded-lg"
+                      style={{ color: '#888888' }}
+                      onMouseEnter={e => {
+                        (e.currentTarget as HTMLElement).style.color = '#C9A84C'
+                        ;(e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'
+                      }}
+                      onMouseLeave={e => {
+                        (e.currentTarget as HTMLElement).style.color = '#888888'
+                        ;(e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
+                      }}
+                    >
+                      <Save className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => toggleAtivo(a)}
+                      title={a.ativo ? 'Desativar' : 'Ativar'}
+                      className="p-1.5 rounded-lg"
+                      style={{ color: '#888888' }}
+                      onMouseEnter={e => {
+                        (e.currentTarget as HTMLElement).style.color = '#FB923C'
+                        ;(e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'
+                      }}
+                      onMouseLeave={e => {
+                        (e.currentTarget as HTMLElement).style.color = '#888888'
+                        ;(e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
+                      }}
+                    >
+                      {a.ativo ? <XCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                    </button>
+                    <button
+                      onClick={() => remover(a.id, a.nome)}
+                      disabled={removendoId === a.id}
+                      title="Remover"
+                      className="p-1.5 rounded-lg disabled:opacity-40"
+                      style={{ color: '#888888' }}
+                      onMouseEnter={e => {
+                        (e.currentTarget as HTMLElement).style.color = '#F87171'
+                        ;(e.currentTarget as HTMLElement).style.backgroundColor = '#1A1A1A'
+                      }}
+                      onMouseLeave={e => {
+                        (e.currentTarget as HTMLElement).style.color = '#888888'
+                        ;(e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
+                      }}
+                    >
+                      {removendoId === a.id
+                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : <Trash2  className="w-4 h-4" />
+                      }
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Aba Configuração de Semanas ──────────────────────────────────────────────
 
 interface SemanaConfigRow {
@@ -3042,6 +3457,7 @@ export default function ConfiguracoesClient({ inicial, meuId }: { inicial: Dados
     { key: 'sendflow',       label: 'Sendflow' },
     { key: 'usuarios',       label: 'Usuários' },
     { key: 'filtros',        label: 'Filtros Personalizados' },
+    { key: 'dashboard_abas', label: 'Abas do Dashboard' },
     { key: 'semanas',        label: 'Semanas' },
   ]
 
@@ -3150,6 +3566,10 @@ export default function ConfiguracoesClient({ inicial, meuId }: { inicial: Dados
 
       {aba === 'filtros' && (
         <AbaFiltrosPersonalizados />
+      )}
+
+      {aba === 'dashboard_abas' && (
+        <AbaDashboardAbas />
       )}
 
       {aba === 'semanas' && (

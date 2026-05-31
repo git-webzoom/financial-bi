@@ -106,7 +106,12 @@ const inputStyle: React.CSSProperties = {
   colorScheme: 'dark',
 }
 
-export default function TpwClient() {
+interface TpwClientProps {
+  filtroTrafegoId?: string | null
+  filtroVendasId?:  string | null
+}
+
+export default function TpwClient({ filtroTrafegoId = null, filtroVendasId = null }: TpwClientProps = {}) {
   const supabase = createClient()
 
   const [dataInicio, setDataInicio] = useState(seteDiasAtras())
@@ -117,21 +122,15 @@ export default function TpwClient() {
   const buscarDados = useCallback(async (inicio: string, fim: string) => {
     setCarregando(true)
     try {
-      const [{ data: ftFiltro }, { data: fvFiltro }] = await Promise.all([
-        supabase.from('filtros_personalizados').select('id')
-          .eq('nome', 'TPW').eq('modulo', 'trafego').eq('ativo', true).maybeSingle(),
-        supabase.from('filtros_personalizados').select('id')
-          .eq('nome', 'TPW').eq('modulo', 'vendas').eq('ativo', true).maybeSingle(),
-      ])
-
+      // Regras dos filtros vinculados à aba (recebidos por props). Sem filtro → soma tudo no range.
       const [{ data: tRegrasRaw }, { data: vRegrasRaw }] = await Promise.all([
-        ftFiltro?.id
+        filtroTrafegoId
           ? supabase.from('filtros_personalizados_regras')
-              .select('campo, operador, valor, ordem').eq('filtro_id', ftFiltro.id).order('ordem')
+              .select('campo, operador, valor, ordem').eq('filtro_id', filtroTrafegoId).order('ordem')
           : Promise.resolve({ data: [] as RegraFiltro[], error: null }),
-        fvFiltro?.id
+        filtroVendasId
           ? supabase.from('filtros_personalizados_regras')
-              .select('campo, operador, valor, ordem').eq('filtro_id', fvFiltro.id).order('ordem')
+              .select('campo, operador, valor, ordem').eq('filtro_id', filtroVendasId).order('ordem')
           : Promise.resolve({ data: [] as RegraFiltro[], error: null }),
       ])
 
@@ -173,12 +172,12 @@ export default function TpwClient() {
       setCarregando(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [filtroTrafegoId, filtroVendasId])
 
   useEffect(() => {
     buscarDados(dataInicio, dataFim)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [buscarDados])
 
   const inv = dados?.investido    ?? 0
   const rec = dados?.receitaBruta ?? 0
