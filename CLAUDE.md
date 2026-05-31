@@ -5,6 +5,19 @@
 
 ---
 
+## 🛠️ Comandos comuns
+
+- `npm install` → instala dependências **e ativa o hook de docs** (via `prepare`)
+- `npm run dev` → sobe o app (Next.js) em desenvolvimento
+- `npm run build` → build de produção (valida TypeScript/Next)
+- `npm run lint` → ESLint
+- `npm run start` → roda o build de produção
+
+> Não há testes automatizados no projeto (ver `docs/PENDENCIAS.md`).
+> Edge Functions (Deno) e migrations: ver `docs/EDGE-FUNCTIONS.md` e `docs/TABELAS.md`.
+
+---
+
 ## ⛔ REGRA DE OURO
 
 **A fonte da verdade é o BANCO DE DADOS REAL (Supabase), não os arquivos de migration.**

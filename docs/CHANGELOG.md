@@ -16,6 +16,13 @@
 
 ---
 
+## [2026-05-31] CLAUDE.md: seção de comandos comuns — @tiago
+- **O quê:** adicionada seção "Comandos comuns" no topo do `CLAUDE.md` (npm install/dev/build/lint/start).
+- **Por quê:** facilitar onboarding; era a única lacuna em relação ao que o `/init` cobriria.
+- **Como testou:** revisão manual; sem mudança de código de sistema.
+- **Impacto/risco:** nenhum (apenas documentação).
+- **Docs atualizados:** CLAUDE.md, CHANGELOG.
+
 ## [2026-05-31] Hook de lembrete de docs + limpeza de segredos — @tiago
 - **O quê:** (1) Hook `Stop` em `.claude/settings.json` (`.claude/hooks/lembrete-docs.sh`)
   que lembra de atualizar docs/CHANGELOG quando há mudança em src/supabase/scripts sem docs,
