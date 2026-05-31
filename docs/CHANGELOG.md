@@ -62,7 +62,8 @@
   (apagar um filtro não apaga a aba — vínculo vira "sem filtro = soma tudo"). A aba TPW saiu do hardcode
   e passou a depender do seed; se a tabela for esvaziada, o dashboard mostra só o Webnário.
 - **Docs atualizados:** TABELAS.md (2 tabelas + snapshot 27→29), FRONTEND.md (dashboard dinâmico +
-  nova seção de config + lib), README.md (snapshot de tabelas), CHANGELOG.
+  nova seção de config + lib), FUNCOES-SQL.md (trigger `trg_dashboard_abas_updated_at`),
+  README.md (snapshot de tabelas), CHANGELOG.
 
 ## [2026-05-31] CLAUDE.md: seção de comandos comuns — @tiago
 - **O quê:** adicionada seção "Comandos comuns" no topo do `CLAUDE.md` (npm install/dev/build/lint/start).

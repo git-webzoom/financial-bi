@@ -64,7 +64,7 @@
 ## Triggers ativos
 | Tabela | Trigger | Quando | Função |
 |--------|---------|--------|--------|
-| `contatos`,`crm`,`filtros_personalizados`,`integration_tokens`,`ofertas`,`produtos`,`profiles`,`vendas` | `trg_*_updated_at` | BEFORE UPDATE | `set_updated_at` |
+| `contatos`,`crm`,`dashboard_abas`,`filtros_personalizados`,`integration_tokens`,`ofertas`,`produtos`,`profiles`,`vendas` | `trg_*_updated_at` | BEFORE UPDATE | `set_updated_at` |
 | `crm` | `trg_crm_historico_utm` | AFTER UPDATE | `trg_crm_historico_utm` (grava histórico de UTM) |
 | `meta_ad_accounts` | `trg_meta_ad_accounts_initial_sync` | AFTER INSERT | `trigger_meta_ads_initial_sync` |
 | `meta_ad_accounts` | `trg_meta_ad_accounts_updated_at` | BEFORE UPDATE | `update_meta_ad_accounts_updated_at` |
