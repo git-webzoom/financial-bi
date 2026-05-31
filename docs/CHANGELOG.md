@@ -16,6 +16,20 @@
 
 ---
 
+## [2026-05-31] Hook de lembrete de docs + limpeza de segredos — @tiago
+- **O quê:** (1) Hook `Stop` em `.claude/settings.json` (`.claude/hooks/lembrete-docs.sh`)
+  que lembra de atualizar docs/CHANGELOG quando há mudança em src/supabase/scripts sem docs,
+  com proteção anti-loop (`stop_hook_active`). (2) Removidos tokens (anon e service_role) que
+  estavam em texto puro nas regras de permissão do `.claude/settings.json`. (3) Criado
+  `.env.example` como modelo de variáveis (sem valores secretos).
+- **Por quê:** padronizar o registro de mudanças automaticamente e evitar vazamento de chave
+  de serviço caso o `settings.json` fosse commitado.
+- **Como testou:** script do hook testado nos 4 cenários (anti-loop; código sem docs → lembra;
+  código com docs → silencia; sem mudanças → silencia). JSON validado com Node.
+- **Impacto/risco:** nenhum no sistema. `.env.local` (credenciais reais) continua intacto e
+  gitignored. Tokens removidos eram sobras de curl, não credenciais usadas pelo sistema.
+- **Docs atualizados:** CHANGELOG; ver também PENDENCIAS.md (alerta de rotação de chave).
+
 ## [2026-05-31] Criação da documentação e governança do projeto — @tiago
 - **O quê:** criados `CLAUDE.md` (regras de fluxo) e a pasta `docs/` completa
   (README, ARQUITETURA, TABELAS, FUNCOES-SQL, EDGE-FUNCTIONS, CRONS, API-ROUTES,

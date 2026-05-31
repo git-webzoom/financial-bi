@@ -2,7 +2,17 @@
 description: Carrega as regras do projeto e prepara a IA para começar com segurança
 ---
 
-Você está começando uma tarefa no projeto **Financial BI**. Antes de qualquer coisa:
+Você está começando uma tarefa no projeto **Financial BI**.
+
+**SE for a primeira vez neste projeto (ambiente ainda não configurado):**
+- Copie `.env.example` para `.env.local` e peça as credenciais reais ao responsável
+  (por um canal seguro — nunca por chat público nem commitando no Git).
+- Rode `npm install` (isso ativa automaticamente o hook de documentação via `prepare`).
+- Saiba que existem duas proteções automáticas: (1) o `git push` é **bloqueado** se você
+  alterar código (`src/`, `supabase/`, `scripts/`) sem atualizar `docs/`; (2) ao terminar
+  uma resposta, um lembrete aparece se a documentação ficou para trás.
+
+Antes de qualquer coisa:
 
 1. **Leia o `CLAUDE.md`** (raiz) e o **`docs/README.md`**. Eles contêm as regras
    obrigatórias e o índice de toda a documentação do sistema.
