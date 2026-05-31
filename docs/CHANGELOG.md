@@ -16,6 +16,43 @@
 
 ---
 
+## [2026-05-31] Feat: aba Webinário do dashboard (funil de 8 passos + KPIs por semana) — @tiago
+- **O quê:** a aba fixa **Webinário** do dashboard deixou de ser placeholder e virou um dashboard real.
+  Novo componente `src/app/(autenticado)/dashboard/_components/WebinarioClient.tsx` (Client) ligado em
+  `dashboard/page.tsx` no lugar do "Conteúdo do Webinário em breve". Também: o funil do mockup
+  `venda_direta` (`TpwClient`) teve o conteúdo centralizado (`text-center`/`justify-center`) e a grafia
+  "Webnário" → "Webinário" foi corrigida nos textos de UI (aba do dashboard, placeholder e Configurações).
+- **Layout:** mesmo estilo do mockup `venda_direta` — 6 KPI cards à esquerda (~65%) + funil à direita (~35%).
+  No lugar do range De/Até, reutiliza o `SeletorSemana` (de `crm/_components`). Funil com **8 passos**:
+  IMPRESSÕES, CLIQUES NO LINK, PAGE VIEW, LEADS, NO GRUPO, SHOW UP, PITCH, Nº VENDAS (cada um com % de
+  conversão vs o anterior). `FUNIL_WIDTHS` estendido para 8 larguras.
+- **Regra de semanas (cada entidade tem a SUA):** o seletor mostra UM número de semana, mas cada métrica
+  resolve o período pela função da própria entidade — tráfego por `listar_semanas_recentes` (captação,
+  filtra `trafego.date_ref`), vendas por `listar_semanas_vendas` (filtra `vendas.data_pedido`), webinário
+  por coluna `numero_semana` (`webinario_inscritos`/`webinario_presencas`). **NO GRUPO** = `total_membros`
+  da campanha Sendflow fixa `OEZjXU3Pish6qR8gF7fv` (ao vivo, não varia com a semana). Status de venda
+  aprovado mantém a regra do mockup (`approved/complete/completed/paid/active/confirmed`).
+- **Semana de referência = CAPTAÇÃO atual** (`get_semana_atual`): a aba abre na semana de captação.
+  Entidades que ainda não chegaram nessa semana (webinário/vendas atrasados) ficam **zeradas**
+  (range nulo / sem linhas) — comportamento desejado.
+- **Filtros personalizados fixos:** tráfego é filtrado pelo filtro **"WEBN"** (`1b4386d9…`, módulo trafego)
+  e vendas pelo filtro **"WEBN Sem Renov"** (`0ec3aba7…`, módulo vendas), aplicados via `aplicarRegras`
+  (mesmo mecanismo das abas dinâmicas). Afeta os 6 KPIs e os passos IMPRESSÕES/CLIQUES/PAGE VIEW/Nº VENDAS;
+  LEADS/NO GRUPO/SHOW UP/PITCH não usam filtro. (IDs fixos no componente, não vêm de `dashboard_abas`.)
+- **Como testou:** `npm run build` limpo (TypeScript/Next OK, `/dashboard` compila). Lógica validada no
+  banco real para a semana ativa 174, COM os filtros WEBN aplicados: IMPRESSÕES 263.931, CLIQUES 3.596,
+  PAGE VIEW 2.562, LEADS 730, NO GRUPO 384, SHOW UP 205, PITCH 96, Nº VENDAS 15 (R$ 9.477,80) — os totais
+  de tráfego/vendas caíram vs. sem filtro (eram 372.058 / 149), confirmando o filtro; tráfego usou 19–26/05
+  e vendas usou 26/05–02/06 (semanas deslocadas, como esperado). Também validada a semana de captação atual
+  175 (padrão da aba): IMPRESSÕES 158.519, CLIQUES 2.185, PAGE VIEW 1.498, LEADS 445, NO GRUPO 384,
+  SHOW UP 0, PITCH 0, Nº VENDAS 0 — confirmando que webinário (ativo na 174) e vendas (sem semana 175)
+  ficam zerados. Pendente: validação visual pelo usuário.
+- **Ajuste visual dos cards:** nos dois mockups (`WebinarioClient` e `TpwClient`) o container dos KPIs ganhou
+  `lg:items-start` + `auto-rows-min` para os cards não esticarem verticalmente acompanhando a altura do funil.
+- **Impacto/risco:** baixo — só frontend, nenhuma mudança de banco/migration/cron. `TpwClient.tsx` teve apenas
+  ajuste de layout dos cards (lógica intacta; KpiCard/Funil foram copiados, não extraídos, no novo componente).
+- **Docs atualizados:** CHANGELOG, FRONTEND.md (linha do `/dashboard`).
+
 ## [2026-05-31] Fix: build do EasyPanel quebrando no script `prepare` — @tiago
 - **O quê:** `package.json` → script `prepare` mudou de `git config core.hooksPath .githooks`
   para `git config core.hooksPath .githooks || true`.
