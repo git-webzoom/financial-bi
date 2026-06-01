@@ -60,8 +60,10 @@ export function aplicarRegras(q: any, regras: RegraFiltro[]): any {
       case 'comeca_com':  q = q.ilike(campo, `${valor}%`); break
       case 'maior_que':   q = q.gt(campo, n); break
       case 'maior_igual': q = q.gte(campo, n); break
-      case 'menor_que':   q = q.lt(campo, n); break
-      case 'menor_igual': q = q.lte(campo, n); break
+      // "menor que/ou igual" inclui registros SEM valor (NULL): no Postgres `NULL <= n` é falso,
+      // mas uma compra avulsa (sem ciclo de assinatura) deve passar no filtro "Sem Renovação".
+      case 'menor_que':   q = q.or(`${campo}.lt.${n},${campo}.is.null`); break
+      case 'menor_igual': q = q.or(`${campo}.lte.${n},${campo}.is.null`); break
     }
   }
   return q

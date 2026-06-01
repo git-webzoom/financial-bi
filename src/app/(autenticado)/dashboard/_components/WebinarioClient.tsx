@@ -107,7 +107,7 @@ function umAsLinha<T>(raw: T | T[] | null): T | null {
   return Array.isArray(raw) ? (raw[0] ?? null) : (raw ?? null)
 }
 
-interface SemanaRange { numero: number; inicio: string; fim: string }
+interface SemanaRange { numero: number; inicio: string; fim: string; inicio_ts?: string; fim_ts?: string }
 
 // ─── Componente principal ──────────────────────────────────────────────────────
 
@@ -168,14 +168,18 @@ export default function WebinarioClient() {
         trafegoQ = Promise.resolve({ data: [] })
       }
 
-      // Vendas (semana de vendas, filtro "WEBN Sem Renov") — data_pedido em BRT
+      // Vendas (semana de vendas, filtro "WEBN Sem Renov") — data_pedido em BRT.
+      // Usa os timestamps com o corte real da semana (ex. terça 20:00→19:59); cai para
+      // dia inteiro 00:00→23:59 só se a RPC não trouxer os _ts (compatibilidade).
       let vendasQ
       if (rangeVendas) {
+        const vIni = rangeVendas.inicio_ts ?? rangeVendas.inicio + 'T00:00:00-03:00'
+        const vFim = rangeVendas.fim_ts    ?? rangeVendas.fim    + 'T23:59:59.999-03:00'
         let q = supabase
           .from('vendas')
           .select('status, valor_venda, venda_principal_id')
-          .gte('data_pedido', rangeVendas.inicio + 'T00:00:00-03:00')
-          .lte('data_pedido', rangeVendas.fim    + 'T23:59:59.999-03:00')
+          .gte('data_pedido', vIni)
+          .lte('data_pedido', vFim)
         if (regrasVendas.length) q = aplicarRegras(q, regrasVendas)
         vendasQ = q
       } else {

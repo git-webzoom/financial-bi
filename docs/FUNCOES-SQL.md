@@ -33,7 +33,7 @@
 | `ensure_semana_webnario_existe` | `p_numero int` | void | Cria a semana de webinário se faltar. |
 | `auto_criar_proxima_semana` | — | void | Garante a próxima semana. **Cron a cada 5 min.** |
 | `listar_semanas_recentes` | `p_limit, p_offset` | TABLE | Semanas recentes (usado nos seletores do frontend). |
-| `listar_semanas_vendas` | `p_limit` | TABLE | Semanas com vendas. |
+| `listar_semanas_vendas` | `p_limit` | TABLE | Semanas para o seletor de Vendas (entidade `webn`). Retorna `numero, inicio, fim` (date) **+ `inicio_ts, fim_ts` (timestamptz)** com o corte de hora real de `semana_config('webn')` em BRT. A numeração é **defasada −1 de propósito** (Vendas/Webinário ficam "uma semana pra trás" vs `listar_semanas_recentes`/`webinario_semanas`). O frontend filtra `data_pedido` por `inicio_ts`/`fim_ts`. |
 
 ## KPIs / consultas
 | Função | Args | Retorno | O que faz |

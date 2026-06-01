@@ -7,7 +7,7 @@ import VendaDrawer from './VendaDrawer'
 import { Search, X, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react'
 import { aplicarRegras } from '@/lib/filtros-personalizados'
 import type { FiltroPersonalizado, RegraFiltro } from '@/lib/filtros-personalizados'
-interface SemanaOpcao { numero: number; inicio: string; fim: string }
+interface SemanaOpcao { numero: number; inicio: string; fim: string; inicio_ts?: string; fim_ts?: string }
 
 const PAGE_SIZE = 20
 
@@ -303,6 +303,10 @@ export default function VendasClient({
   const [dataInicio, setDataInicio] = useState(dataInicioDefault)
   const [dataFim, setDataFim]       = useState(dataFimDefault)
   const [semanaVal,  setSemanaVal]  = useState('')
+  // Timestamps do corte real da semana selecionada (ex.: terça 20:00 → terça 19:59).
+  // Quando preenchidos, têm prioridade sobre as datas puras dos inputs De/Até na busca.
+  const [semanaInicioTs, setSemanaInicioTs] = useState('')
+  const [semanaFimTs,    setSemanaFimTs]    = useState('')
   const [produtoId, setProdutoId]   = useState('')
   const [status, setStatus]         = useState('')
   const [pagamento, setPagamento]   = useState('')
@@ -395,6 +399,51 @@ export default function VendasClient({
     })
   }, [supabase])
 
+  // Monta 1 linha por COMPRA a partir das linhas que passaram um filtro personalizado.
+  // Diferente de agregarBumps: aqui a MÃE pode NÃO ter passado o filtro (ex.: "Sala VIP Mensal"
+  // com bumps "[WEBN|UPSELL]"). Agrupa por coalesce(venda_principal_id, id); busca as mães que
+  // faltam (para exibir nome/dados da compra) e soma valor/qtd contando SÓ as linhas filtradas
+  // (o valor da mãe que ficou de fora do filtro NÃO entra — opção A confirmada pelo usuário).
+  const montarComprasFiltradas = useCallback(async (linhas: Venda[]): Promise<Venda[]> => {
+    if (linhas.length === 0) return []
+
+    // Agrupa as linhas filtradas por id de compra (mãe).
+    const grupos = new Map<string, Venda[]>()
+    for (const l of linhas) {
+      const compraId = l.venda_principal_id ?? l.id
+      const arr = grupos.get(compraId) ?? []
+      arr.push(l)
+      grupos.set(compraId, arr)
+    }
+
+    // Mães já presentes entre as linhas filtradas; as que faltam (mãe não passou o filtro) buscamos.
+    const presentes = new Map(linhas.filter(l => l.venda_principal_id == null).map(l => [l.id, l]))
+    const idsFaltantes = Array.from(grupos.keys()).filter(id => !presentes.has(id))
+    if (idsFaltantes.length > 0) {
+      const { data: maesFaltantes } = await supabase
+        .from('vendas').select('*').in('id', idsFaltantes)
+      for (const m of (maesFaltantes as Venda[]) ?? []) presentes.set(m.id, m)
+    }
+
+    // Monta uma linha por compra: dados da mãe + agregados das linhas FILTRADAS daquela compra.
+    const compras: Venda[] = []
+    for (const [compraId, doGrupo] of Array.from(grupos.entries())) {
+      const mae = presentes.get(compraId)
+      if (!mae) continue   // mãe não encontrada (raro); ignora a compra
+      // bumps filtrados = linhas do grupo que não são a própria mãe
+      const aprovadasFiltradas = doGrupo.filter(l => STATUS_APROVADO.includes(l.status))
+      compras.push({
+        ...mae,
+        qtd_bumps: doGrupo.filter(l => l.id !== compraId).length,
+        valor_total_grupo:         aprovadasFiltradas.reduce((s, l) => s + (l.valor_venda   ?? 0), 0),
+        valor_liquido_total_grupo: aprovadasFiltradas.reduce((s, l) => s + (l.valor_liquido ?? 0), 0),
+      })
+    }
+    // Ordena por data do pedido desc (mesma ordem da tabela)
+    compras.sort((a, b) => (b.data_pedido ?? '').localeCompare(a.data_pedido ?? ''))
+    return compras
+  }, [supabase])
+
   // Agrega os bumps na lista inicial (SSR) uma única vez, para o badge "+N" e o valor
   // total aparecerem já na primeira renderização (o SSR não agrega).
   useEffect(() => {
@@ -411,7 +460,9 @@ export default function VendasClient({
     const aprovadas = todasVendas.filter(v => STATUS_APROVADO.includes(v.status))
     const bruto     = aprovadas.reduce((s, v) => s + (v.valor_venda   ?? 0), 0)
     const liquido   = aprovadas.reduce((s, v) => s + (v.valor_liquido ?? 0), 0)
-    const nVendas   = aprovadas.filter(v => v.venda_principal_id == null).length
+    // Conta COMPRAS distintas (não "venda_principal_id == null"): um order bump que passa o filtro
+    // mas cuja mãe NÃO passa (ex.: mãe "Sala VIP Mensal" + bumps WEBN) ainda conta a compra como 1.
+    const nVendas   = new Set(aprovadas.map(v => v.venda_principal_id ?? v.id)).size
     setKpis({
       faturamentoBruto:   bruto,
       faturamentoLiquido: liquido,
@@ -448,9 +499,42 @@ export default function VendasClient({
     emails?: string[]
   }) => {
     startTransition(async () => {
-      const inicio = params.dataInicio + 'T00:00:00-03:00'
-      const fim    = params.dataFim    + 'T23:59:59.999-03:00'
+      // Seletor de SEMANA já manda timestamp completo (com o corte real, ex. terça 20:00→19:59).
+      // Inputs De/Até manuais mandam só a data (YYYY-MM-DD) → vira dia inteiro 00:00→23:59.
+      const inicio = params.dataInicio.includes('T') ? params.dataInicio : params.dataInicio + 'T00:00:00-03:00'
+      const fim    = params.dataFim.includes('T')    ? params.dataFim    : params.dataFim    + 'T23:59:59.999-03:00'
 
+      // ── MODO FILTRO PERSONALIZADO ──────────────────────────────────────────
+      // Uma linha pode passar o filtro (ex.: bump "[WEBN|UPSELL]") sem que a MÃE passe
+      // (ex.: "Sala VIP Mensal" sem WEBN). Por isso NÃO podemos filtrar mães no banco antes:
+      // buscamos todas as linhas que passam o filtro, agrupamos por COMPRA (coalesce(pai,id)),
+      // contamos compras distintas e exibimos 1 linha por compra. Valor da linha = só itens que
+      // passam o filtro (não soma a mãe que ficou de fora). Paginação no client (volume baixo).
+      if (!params.emails?.length && filtroPersonalizadoRef.current?.regras?.length) {
+        let qAll = supabase
+          .from('vendas')
+          .select('*')
+          .gte('data_pedido', inicio)
+          .lte('data_pedido', fim)
+          .order('data_pedido', { ascending: false })
+
+        if (params.produtoId)   qAll = qAll.eq('produto_id', params.produtoId)
+        if (params.status)      qAll = qAll.eq('status', params.status)
+        if (params.pagamento)   qAll = qAll.ilike('pagamento', `%${params.pagamento}%`)
+        if (params.marketplace) qAll = qAll.eq('marketplace', params.marketplace)
+        qAll = aplicarRegras(qAll, filtroPersonalizadoRef.current.regras)
+
+        const linhasFiltradas = ((await qAll).data as Venda[]) ?? []
+        calcularKpisLocais(linhasFiltradas)                 // conta compras distintas; soma só linhas do filtro
+
+        const comprasPaginadas = await montarComprasFiltradas(linhasFiltradas)
+        setTodasVendasEmails(comprasPaginadas)              // reaproveita o buffer de paginação client
+        setTotal(comprasPaginadas.length)
+        setVendas(comprasPaginadas.slice(params.pagina * PAGE_SIZE, params.pagina * PAGE_SIZE + PAGE_SIZE))
+        return
+      }
+
+      // ── MODO NORMAL (sem filtro personalizado) e MODO E-MAILS ──────────────
       let q = supabase
         .from('vendas')
         .select('*', { count: 'exact' })
@@ -469,58 +553,52 @@ export default function VendasClient({
       if (params.status)      q = q.eq('status', params.status)
       if (params.pagamento)   q = q.ilike('pagamento', `%${params.pagamento}%`)
       if (params.marketplace) q = q.eq('marketplace', params.marketplace)
-      if (filtroPersonalizadoRef.current?.regras?.length) q = aplicarRegras(q, filtroPersonalizadoRef.current.regras)
 
       const { data, count } = await q
       const maes = await agregarBumps((data as Venda[]) ?? [])
       setVendas(maes)
       setTotal(count ?? 0)
 
+      // KPIs do modo normal (sem filtro personalizado): agregados no banco.
       if (!params.emails?.length) {
-        // Se há filtro personalizado ativo, busca todas as vendas filtradas para calcular KPIs localmente
-        if (filtroPersonalizadoRef.current?.regras?.length) {
-          let qAll = supabase
-            .from('vendas')
-            .select('*')
-            .gte('data_pedido', inicio)
-            .lte('data_pedido', fim)
+        const { data: kdata } = await supabase.rpc('get_kpis_vendas', {
+          p_inicio:      inicio,
+          p_fim:         fim,
+          p_produto_id:  params.produtoId  || null,
+          p_marketplace: params.marketplace || null,
+        })
 
-          if (params.produtoId)   qAll = qAll.eq('produto_id', params.produtoId)
-          if (params.status)      qAll = qAll.eq('status', params.status)
-          if (params.pagamento)   qAll = qAll.ilike('pagamento', `%${params.pagamento}%`)
-          if (params.marketplace) qAll = qAll.eq('marketplace', params.marketplace)
-          qAll = aplicarRegras(qAll, filtroPersonalizadoRef.current.regras)
+        const k = kdata ?? {}
+        const bruto   = k.faturamentoBruto  ?? 0
+        const nVendas = k.totalVendas       ?? 0
 
-          const { data: todas } = await qAll
-          calcularKpisLocais((todas as Venda[]) ?? [])
-        } else {
-          const { data: kdata } = await supabase.rpc('get_kpis_vendas', {
-            p_inicio:      inicio,
-            p_fim:         fim,
-            p_produto_id:  params.produtoId  || null,
-            p_marketplace: params.marketplace || null,
-          })
-
-          const k = kdata ?? {}
-          const bruto   = k.faturamentoBruto  ?? 0
-          const nVendas = k.totalVendas       ?? 0
-
-          setKpis({
-            faturamentoBruto:   bruto,
-            faturamentoLiquido: k.faturamentoLiquido ?? 0,
-            totalVendas:        nVendas,
-            ticketMedio:        nVendas > 0 ? bruto / nVendas : 0,
-            reembolsos:         k.reembolsos  ?? 0,
-            chargebacks:        k.chargebacks ?? 0,
-          })
-        }
+        setKpis({
+          faturamentoBruto:   bruto,
+          faturamentoLiquido: k.faturamentoLiquido ?? 0,
+          totalVendas:        nVendas,
+          ticketMedio:        nVendas > 0 ? bruto / nVendas : 0,
+          reembolsos:         k.reembolsos  ?? 0,
+          chargebacks:        k.chargebacks ?? 0,
+        })
       }
     })
-  }, [supabase])
+  }, [supabase, calcularKpisLocais, agregarBumps, montarComprasFiltradas])
+
+  // Sai do "modo semana": editar DE/ATÉ manualmente cancela a semana → período por dia inteiro.
+  function limparSemana() {
+    setSemanaVal('')
+    setSemanaInicioTs('')
+    setSemanaFimTs('')
+  }
 
   function aplicarFiltros(novaPagina = 0) {
     setPagina(novaPagina)
-    buscar({ dataInicio, dataFim, produtoId, status, pagamento, marketplace, pagina: novaPagina, emails: emailsFiltro })
+    // Se há semana selecionada, usa os timestamps do corte (terça 20:00→19:59); senão, datas puras.
+    buscar({
+      dataInicio: semanaInicioTs || dataInicio,
+      dataFim:    semanaFimTs    || dataFim,
+      produtoId, status, pagamento, marketplace, pagina: novaPagina, emails: emailsFiltro,
+    })
   }
 
   function handleFiltroSalvo(id: string) {
@@ -534,7 +612,7 @@ export default function VendasClient({
     setProdutoId(''); setStatus(''); setPagamento(''); setMarketplace('')
     setEmailsFiltro([])
     setTodasVendasEmails([])
-    setSemanaVal('')
+    limparSemana()
     setDataInicio(dataInicioDefault)
     setDataFim(dataFimDefault)
     filtroPersonalizadoRef.current = null
@@ -545,10 +623,17 @@ export default function VendasClient({
 
   function mudarPagina(nova: number) {
     setPagina(nova)
-    if (emailsFiltro.length > 0) {
+    // Modo e-mails e modo filtro personalizado paginam no client (buffer todasVendasEmails);
+    // modo normal pagina no banco.
+    if (emailsFiltro.length > 0 || filtroPersonalizadoRef.current?.regras?.length) {
       setVendas(todasVendasEmails.slice(nova * PAGE_SIZE, nova * PAGE_SIZE + PAGE_SIZE))
     } else {
-      buscar({ dataInicio, dataFim, produtoId, status, pagamento, marketplace, pagina: nova, emails: [] })
+      // Mantém o corte de hora da semana selecionada também ao paginar.
+      buscar({
+        dataInicio: semanaInicioTs || dataInicio,
+        dataFim:    semanaFimTs    || dataFim,
+        produtoId, status, pagamento, marketplace, pagina: nova, emails: [],
+      })
     }
   }
 
@@ -614,7 +699,7 @@ export default function VendasClient({
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>De</label>
             <input type="date" value={dataInicio}
-              onChange={(e) => setDataInicio(e.target.value)}
+              onChange={(e) => { setDataInicio(e.target.value); limparSemana() }}
               style={inputStyle}
               onFocus={e => (e.target.style.borderColor = '#C9A84C')}
               onBlur={e => (e.target.style.borderColor = '#222222')}
@@ -624,7 +709,7 @@ export default function VendasClient({
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Até</label>
             <input type="date" value={dataFim}
-              onChange={(e) => setDataFim(e.target.value)}
+              onChange={(e) => { setDataFim(e.target.value); limparSemana() }}
               style={inputStyle}
               onFocus={e => (e.target.style.borderColor = '#C9A84C')}
               onBlur={e => (e.target.style.borderColor = '#222222')}
@@ -640,10 +725,19 @@ export default function VendasClient({
                   const val = e.target.value
                   setSemanaVal(val)
                   if (!val) return
-                  const [inicio, fim] = val.split('|')
+                  // value = "inicioDate|fimDate|inicioTs|fimTs" — datas alimentam os inputs De/Até;
+                  // os timestamps (com o corte real da semana) ficam guardados em estado e têm
+                  // prioridade na busca em TODOS os caminhos (Buscar, funil, paginação).
+                  const [inicio, fim, inicioTs, fimTs] = val.split('|')
                   setDataInicio(inicio)
                   setDataFim(fim)
-                  buscar({ dataInicio: inicio, dataFim: fim, produtoId, status, pagamento, marketplace, pagina: 0, emails: emailsFiltro })
+                  setSemanaInicioTs(inicioTs)
+                  setSemanaFimTs(fimTs)
+                  buscar({
+                    dataInicio: inicioTs || inicio,
+                    dataFim:    fimTs    || fim,
+                    produtoId, status, pagamento, marketplace, pagina: 0, emails: emailsFiltro,
+                  })
                   setPagina(0)
                 }}
                 style={inputStyle}
@@ -652,7 +746,7 @@ export default function VendasClient({
               >
                 <option value="">Selecionar semana…</option>
                 {semanas.map(s => (
-                  <option key={s.numero} value={`${s.inicio}|${s.fim}`}>Semana {s.numero}</option>
+                  <option key={s.numero} value={`${s.inicio}|${s.fim}|${s.inicio_ts ?? ''}|${s.fim_ts ?? ''}`}>Semana {s.numero}</option>
                 ))}
               </select>
             </div>
