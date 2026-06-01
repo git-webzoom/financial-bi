@@ -6,7 +6,7 @@
 ## Funções de ingestão / processamento
 | Função | Args | Retorno | O que faz |
 |--------|------|---------|-----------|
-| `process_venda` | `raw_id uuid` | void | Lê `raw_vendas`, faz `upsert_contato`, insere/atualiza em `vendas`, marca processado. |
+| `process_venda` | `raw_id uuid` | void | Lê `raw_vendas`, faz `upsert_contato`, insere/atualiza em `vendas`, marca processado. Preenche `venda_principal_id` (order bump/upsell → mãe via `payload.last_transaction.id`). |
 | `process_trafego` | `p_raw_id uuid` | void | Processa uma linha de `raw_trafego` para `trafego`. |
 | `process_raw_trafego_batch` | — | jsonb | Processa lote pendente de `raw_trafego`. **Roda em cron a cada 1 min.** |
 | `upsert_contato` | email + 10 campos opcionais | uuid | Email único; só preenche campos NULL (não sobrescreve dados existentes). |
@@ -38,7 +38,7 @@
 ## KPIs / consultas
 | Função | Args | Retorno | O que faz |
 |--------|------|---------|-----------|
-| `get_kpis_vendas` | inicio, fim, produto?, marketplace? | json | KPIs agregados de vendas. |
+| `get_kpis_vendas` | inicio, fim, produto?, marketplace? | json | KPIs agregados de vendas. **`totalVendas` conta só a venda mãe** (`venda_principal_id IS NULL`); faturamento soma mãe + order bumps aprovados do grupo (status por linha). |
 | `is_venda_aprovada` | `p_status text` | boolean | Regra única de "venda aprovada". |
 
 ## Disparo de jobs / Meta Ads

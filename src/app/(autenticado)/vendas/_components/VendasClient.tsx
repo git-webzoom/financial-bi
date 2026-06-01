@@ -45,7 +45,14 @@ export interface Venda {
   utm_medium: string | null
   utm_content: string | null
   motivo_reembolso: string | null
+  venda_principal_id: string | null
+  // Derivados do agrupamento de order bumps/upsells (preenchidos no client):
+  qtd_bumps?: number
+  valor_total_grupo?: number          // mãe + bumps aprovados (valor_venda)
+  valor_liquido_total_grupo?: number  // mãe + bumps aprovados (valor_liquido)
 }
+
+const STATUS_APROVADO = ['approved', 'complete', 'completed', 'paid', 'active', 'confirmed']
 
 interface Kpis {
   faturamentoBruto: number
@@ -354,13 +361,57 @@ export default function VendasClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const STATUS_APROVADO = ['approved', 'complete', 'completed', 'paid', 'active', 'confirmed']
+  // Agrupa order bumps/upsells nas mães: dada uma lista de MÃES (venda_principal_id IS NULL),
+  // busca os bumps vinculados e preenche qtd_bumps + valor_total_grupo (mãe + bumps APROVADOS).
+  const agregarBumps = useCallback(async (maes: Venda[]): Promise<Venda[]> => {
+    const ids = maes.map(m => m.id)
+    if (ids.length === 0) return maes
 
+    const { data: bumpsRaw } = await supabase
+      .from('vendas')
+      .select('venda_principal_id, status, valor_venda, valor_liquido')
+      .in('venda_principal_id', ids)
+
+    const porMae = new Map<string, { qtd: number; soma: number; somaLiq: number }>()
+    for (const b of (bumpsRaw ?? []) as Array<{ venda_principal_id: string; status: string; valor_venda: number | null; valor_liquido: number | null }>) {
+      const ag = porMae.get(b.venda_principal_id) ?? { qtd: 0, soma: 0, somaLiq: 0 }
+      ag.qtd += 1
+      if (STATUS_APROVADO.includes(b.status)) {
+        ag.soma    += b.valor_venda   ?? 0
+        ag.somaLiq += b.valor_liquido ?? 0
+      }
+      porMae.set(b.venda_principal_id, ag)
+    }
+
+    return maes.map(m => {
+      const ag = porMae.get(m.id)
+      const maeAprovada = STATUS_APROVADO.includes(m.status)
+      return {
+        ...m,
+        qtd_bumps: ag?.qtd ?? 0,
+        valor_total_grupo:         (maeAprovada ? (m.valor_venda   ?? 0) : 0) + (ag?.soma    ?? 0),
+        valor_liquido_total_grupo: (maeAprovada ? (m.valor_liquido ?? 0) : 0) + (ag?.somaLiq ?? 0),
+      }
+    })
+  }, [supabase])
+
+  // Agrega os bumps na lista inicial (SSR) uma única vez, para o badge "+N" e o valor
+  // total aparecerem já na primeira renderização (o SSR não agrega).
+  useEffect(() => {
+    if (initialVendas.length === 0) return
+    let cancelado = false
+    agregarBumps(initialVendas).then(maes => { if (!cancelado) setVendas(maes) })
+    return () => { cancelado = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // KPIs calculados no client (modo filtro personalizado / emails). A lista recebida pode conter
+  // mães E bumps misturados; contamos só mães aprovadas e somamos o valor de TODAS as aprovadas.
   const calcularKpisLocais = useCallback((todasVendas: Venda[]) => {
     const aprovadas = todasVendas.filter(v => STATUS_APROVADO.includes(v.status))
     const bruto     = aprovadas.reduce((s, v) => s + (v.valor_venda   ?? 0), 0)
     const liquido   = aprovadas.reduce((s, v) => s + (v.valor_liquido ?? 0), 0)
-    const nVendas   = aprovadas.length
+    const nVendas   = aprovadas.filter(v => v.venda_principal_id == null).length
     setKpis({
       faturamentoBruto:   bruto,
       faturamentoLiquido: liquido,
@@ -381,13 +432,15 @@ export default function VendasClient({
         .order('data_pedido', { ascending: false })
 
       const lista = (todas ?? []) as Venda[]
-      calcularKpisLocais(lista)
-      setTodasVendasEmails(lista)
-      setTotal(lista.length)
-      setVendas(lista.slice(0, PAGE_SIZE))
+      calcularKpisLocais(lista)              // conta só mães, soma tudo aprovado
+      // A tabela mostra só as mães (1 linha por compra), com os bumps agregados.
+      const maes = await agregarBumps(lista.filter(v => v.venda_principal_id == null))
+      setTodasVendasEmails(maes)
+      setTotal(maes.length)
+      setVendas(maes.slice(0, PAGE_SIZE))
       setPagina(0)
     })
-  }, [supabase, calcularKpisLocais])
+  }, [supabase, calcularKpisLocais, agregarBumps])
 
   const buscar = useCallback(async (params: {
     dataInicio: string; dataFim: string; produtoId: string
@@ -401,6 +454,7 @@ export default function VendasClient({
       let q = supabase
         .from('vendas')
         .select('*', { count: 'exact' })
+        .is('venda_principal_id', null)   // só mães/avulsas: 1 linha por compra
         .order('data_pedido', { ascending: false })
         .range(params.pagina * PAGE_SIZE, params.pagina * PAGE_SIZE + PAGE_SIZE - 1)
 
@@ -418,7 +472,8 @@ export default function VendasClient({
       if (filtroPersonalizadoRef.current?.regras?.length) q = aplicarRegras(q, filtroPersonalizadoRef.current.regras)
 
       const { data, count } = await q
-      setVendas((data as Venda[]) ?? [])
+      const maes = await agregarBumps((data as Venda[]) ?? [])
+      setVendas(maes)
       setTotal(count ?? 0)
 
       if (!params.emails?.length) {
@@ -735,11 +790,22 @@ export default function VendasClient({
                     <td className="px-4 py-3 max-w-[160px] truncate" style={{ color: '#FFFFFF' }}>
                       {produtos.find((p) => p.id === v.produto_id)?.nome ?? v.produto_id ?? '—'}
                     </td>
-                    <td className="px-4 py-3 max-w-[160px] truncate" style={{ color: '#888888' }}>
-                      {v.nome_oferta ?? '—'}
+                    <td className="px-4 py-3 max-w-[200px]" style={{ color: '#888888' }}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="truncate">{v.nome_oferta ?? '—'}</span>
+                        {(v.qtd_bumps ?? 0) > 0 && (
+                          <span
+                            className="shrink-0 px-1.5 py-0.5 rounded-full text-xs font-semibold"
+                            style={{ backgroundColor: '#2A1E08', color: '#C9A84C', border: '1px solid #C9A84C44' }}
+                            title={`Inclui ${v.qtd_bumps} order bump/upsell nesta compra`}
+                          >
+                            +{v.qtd_bumps}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right font-medium whitespace-nowrap" style={{ color: '#C9A84C' }}>
-                      {formatMoeda(v.valor_venda, v.moeda)}
+                      {formatMoeda(v.valor_total_grupo ?? v.valor_venda, v.moeda)}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <StatusBadge status={v.status} />

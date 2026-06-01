@@ -35,10 +35,6 @@ interface FunilStep {
 
 const STATUS_APROVADO = ['approved', 'complete', 'completed', 'paid', 'active', 'confirmed']
 
-// Campanha Sendflow FIXA para a métrica "NO GRUPO". O Sendflow troca os grupos por dentro
-// dela toda terça, mas o ID da campanha é sempre o mesmo. Não varia com a semana selecionada.
-const CAMPANHA_GRUPO_ID = 'OEZjXU3Pish6qR8gF7fv'
-
 // Filtros personalizados fixos da aba Webinário (afetam só tráfego e vendas).
 const FILTRO_TRAFEGO_ID = '1b4386d9-6a7f-4f9f-a0aa-81c45f62578f' // "WEBN" (trafego)
 const FILTRO_VENDAS_ID  = '0ec3aba7-cc3f-4d3e-a6af-b0dda68ea762' // "WEBN Sem Renov" (vendas)
@@ -177,7 +173,7 @@ export default function WebinarioClient() {
       if (rangeVendas) {
         let q = supabase
           .from('vendas')
-          .select('status, valor_venda')
+          .select('status, valor_venda, venda_principal_id')
           .gte('data_pedido', rangeVendas.inicio + 'T00:00:00-03:00')
           .lte('data_pedido', rangeVendas.fim    + 'T23:59:59.999-03:00')
         if (regrasVendas.length) q = aplicarRegras(q, regrasVendas)
@@ -203,11 +199,12 @@ export default function WebinarioClient() {
         .eq('numero_semana', numeroSemana)
         .eq('viu_pitch', true)
 
-      // Grupo (campanha fixa) — total de membros ao vivo
+      // NO GRUPO — histórico da semana (mesma fonte do card "No grupo · Semana N" em /grupos):
+      // grupos_kpis_semana.no_grupo_agora filtrado por numero_semana.
       const grupoQ = supabase
-        .from('sendflow_campanhas')
-        .select('total_membros')
-        .eq('id', CAMPANHA_GRUPO_ID)
+        .from('grupos_kpis_semana')
+        .select('no_grupo_agora')
+        .eq('numero_semana', numeroSemana)
         .maybeSingle()
 
       const [
@@ -232,16 +229,18 @@ export default function WebinarioClient() {
 
       const aprovadas    = (vRows ?? []).filter((v: { status: string }) => STATUS_APROVADO.includes(v.status))
       const receitaBruta = aprovadas.reduce((s: number, v: { valor_venda: number | null }) => s + (v.valor_venda ?? 0), 0)
+      // Conta só a venda mãe (1 por compra); order bumps/upsells (venda_principal_id != null) não contam.
+      const numVendas    = aprovadas.filter((v: { venda_principal_id: string | null }) => v.venda_principal_id == null).length
 
       setPeriodo(periodoWebn)
       setDados({
         ...trafego,
         receitaBruta,
-        numVendas: aprovadas.length,
+        numVendas,
         leads:     leadsCount  ?? 0,
         showUp:    showUpCount ?? 0,
         pitch:     pitchCount  ?? 0,
-        noGrupo:   (grupoRow as { total_membros: number | null } | null)?.total_membros ?? 0,
+        noGrupo:   (grupoRow as { no_grupo_agora: number | null } | null)?.no_grupo_agora ?? 0,
       })
     } finally {
       setCarregando(false)
