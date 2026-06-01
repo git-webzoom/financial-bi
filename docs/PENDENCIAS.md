@@ -34,6 +34,11 @@
 5. **Scripts de import em CommonJS** (`scripts/*.js`) — inconsistente com TS/ESM do resto. Migração é mecânica.
 6. **Logging não-estruturado** nas Edge Functions (`console.log` texto puro). Migrar p/ JSON ajuda observabilidade
    — risco médio: conferir antes se há algum alerta no dashboard que faz parse do texto atual.
+7. **Drift de `semana_config` (banco ≠ migration).** O banco real tem `captacao`=19:30/19:29 e `webn`=20:00/19:59
+   (editados pela tela de Configurações). A migration `20260521000001_simplify_semana_config.sql` versiona 20:00/19:59
+   para ambos. A fonte da verdade é o banco (a config é gerenciada pela UI), mas um rebuild a partir das migrations
+   reintroduziria os valores antigos. Avaliar: ou parar de versionar os valores em migration, ou criar uma migration
+   de reconciliação quando a config estabilizar. Hoje não quebra — só atenção em recriação do banco.
 
 ## 🟢 Resolvidos / esclarecidos
 - ✅ **RLS habilitado nas 5 tabelas que estavam expostas à `anon` key** (2026-05-31):
