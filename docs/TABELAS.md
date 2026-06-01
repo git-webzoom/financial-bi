@@ -9,7 +9,7 @@
 | Tabela | Col. | ~Linhas | O que é / faz |
 |--------|------|---------|---------------|
 | `contatos` | 14 | 6.843 | Master de pessoas. **Email é chave única** (lowercase/trim). Preenchido por `upsert_contato`. |
-| `vendas` | 38 | 4.252 | Transações (approved/refunded/chargeback/...). Vem de `raw_vendas` via `process_venda`. FKs soft p/ produto/oferta/contato. |
+| `vendas` | 39 | 4.329 | Transações (approved/refunded/chargeback/...). Vem de `raw_vendas` via `process_venda`. FKs soft p/ produto/oferta/contato. **`venda_principal_id`** (uuid, índice): agrupa order bumps/upsells na venda mãe — NULL = mãe ou avulsa; preenchido por `process_venda` via `payload.last_transaction.id`. Ver INTEGRACOES (Manager Guru). |
 | `produtos` | 7 | 209 | Catálogo (Manager Guru). `marketplace_id` único. |
 | `ofertas` | 17 | 2.833 | Ofertas/preços por produto. `mg_offer_id` único. |
 | `trafego` | 28 | 5.974 | Insights Meta Ads por ad/adset/campanha/dia. Vem de `raw_trafego`. |
@@ -50,7 +50,7 @@
 ## Índices relevantes (não-PK)
 - `trafego`: `ad_account_id`, `campaign_name`, `date_ref`; únicos `ad_id+date` e `name+date`.
   - ⚠️ **Não há índice em `adset_name`** apesar de ser filtrado no frontend (ver `PENDENCIAS.md`).
-- `vendas`: `contato_id`, `produto_id`, `oferta_id`, `status`, `data_aprovacao`, `email_contato`, `utm_campaign`.
+- `vendas`: `contato_id`, `produto_id`, `oferta_id`, `status`, `data_aprovacao`, `email_contato`, `utm_campaign`, `venda_principal_id`.
 - `crm`: `ac_contact_id`, `contato_id`, `email`, `tags` (GIN).
 - `contatos`: `email` (único), `telefone`, `doc`, `ac_contact_id`.
 - `webinario_inscritos`: `contato`, `semana`, `inscricao`.

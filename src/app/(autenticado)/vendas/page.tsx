@@ -37,10 +37,12 @@ export default async function VendasPage() {
     nome: produtosNomes?.find((p) => p.id === id)?.nome ?? id,
   })).sort((a, b) => a.nome.localeCompare(b.nome))
 
-  // Primeira página — select simples sem join (FKs foram removidas)
+  // Primeira página — só vendas mãe/avulsas (venda_principal_id IS NULL): 1 linha por compra.
+  // Os order bumps/upsells são agregados no client (badge "+N" e valor total).
   const { data: vendas, count } = await supabase
     .from('vendas')
     .select('*', { count: 'exact' })
+    .is('venda_principal_id', null)
     .gte('data_pedido', inicio)
     .lte('data_pedido', fim)
     .order('data_pedido', { ascending: false })

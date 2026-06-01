@@ -146,7 +146,7 @@ export default function TpwClient({ filtroTrafegoId = null, filtroVendasId = nul
 
       let vendasQ = supabase
         .from('vendas')
-        .select('status, valor_venda')
+        .select('status, valor_venda, venda_principal_id')
         .gte('data_pedido', inicio + 'T00:00:00-03:00')
         .lte('data_pedido', fim    + 'T23:59:59.999-03:00')
       if (regrasVendas.length) vendasQ = aplicarRegras(vendasQ, regrasVendas)
@@ -166,8 +166,10 @@ export default function TpwClient({ filtroTrafegoId = null, filtroVendasId = nul
 
       const aprovadas    = (vRows ?? []).filter((v: { status: string }) => STATUS_APROVADO.includes(v.status))
       const receitaBruta = aprovadas.reduce((s: number, v: { valor_venda: number | null }) => s + (v.valor_venda ?? 0), 0)
+      // Conta só a venda mãe (1 por compra); order bumps/upsells (venda_principal_id != null) não contam.
+      const numVendas    = aprovadas.filter((v: { venda_principal_id: string | null }) => v.venda_principal_id == null).length
 
-      setDados({ ...trafego, receitaBruta, numVendas: aprovadas.length })
+      setDados({ ...trafego, receitaBruta, numVendas })
     } finally {
       setCarregando(false)
     }

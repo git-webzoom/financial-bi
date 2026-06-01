@@ -1,9 +1,19 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import { formatMoeda, formatData } from '@/lib/format'
 import type { Venda } from './VendasClient'
+
+const STATUS_APROVADO = ['approved', 'complete', 'completed', 'paid', 'active', 'confirmed']
+
+interface ItemCompra {
+  id: string
+  nome_oferta: string | null
+  valor_venda: number | null
+  status: string
+}
 
 const STATUS_BADGE: Record<string, { bg: string; text: string }> = {
   approved:     { bg: '#0F2A1A', text: '#4ADE80' },
@@ -51,6 +61,8 @@ interface Props {
 }
 
 export default function VendaDrawer({ venda, onClose }: Props) {
+  const [bumps, setBumps] = useState<ItemCompra[]>([])
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
@@ -59,7 +71,27 @@ export default function VendaDrawer({ venda, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  // Busca os order bumps/upsells desta compra (vinculados pela venda mãe).
+  useEffect(() => {
+    if ((venda.qtd_bumps ?? 0) === 0) { setBumps([]); return }
+    const supabase = createClient()
+    let cancelado = false
+    supabase
+      .from('vendas')
+      .select('id, nome_oferta, valor_venda, status')
+      .eq('venda_principal_id', venda.id)
+      .order('data_pedido', { ascending: true })
+      .then(({ data }) => { if (!cancelado) setBumps((data as ItemCompra[]) ?? []) })
+    return () => { cancelado = true }
+  }, [venda.id, venda.qtd_bumps])
+
   const badge = STATUS_BADGE[venda.status] ?? { bg: '#1A1A1A', text: '#888888' }
+
+  const temBumps = (venda.qtd_bumps ?? 0) > 0
+  // Total da compra = mãe (se aprovada) + bumps aprovados.
+  const totalCompra =
+    (STATUS_APROVADO.includes(venda.status) ? (venda.valor_venda ?? 0) : 0) +
+    bumps.filter(b => STATUS_APROVADO.includes(b.status)).reduce((s, b) => s + (b.valor_venda ?? 0), 0)
 
   return (
     <>
@@ -104,6 +136,40 @@ export default function VendaDrawer({ venda, onClose }: Props) {
 
         {/* Corpo */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+
+          {temBumps && (
+            <Secao titulo={`Itens da compra (${(venda.qtd_bumps ?? 0) + 1})`}>
+              {/* Venda principal */}
+              <div className="flex items-center justify-between gap-3 py-2" style={{ borderBottom: '1px solid #1E1E1E' }}>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate" style={{ color: '#FFFFFF' }}>{venda.nome_oferta ?? '—'}</p>
+                  <p className="text-xs" style={{ color: '#C9A84C' }}>Principal</p>
+                </div>
+                <span className="text-sm font-medium shrink-0" style={{ color: STATUS_APROVADO.includes(venda.status) ? '#FFFFFF' : '#666666' }}>
+                  {formatMoeda(venda.valor_venda, venda.moeda)}
+                </span>
+              </div>
+              {/* Order bumps / upsells */}
+              {bumps.map(b => (
+                <div key={b.id} className="flex items-center justify-between gap-3 py-2" style={{ borderBottom: '1px solid #1E1E1E' }}>
+                  <div className="min-w-0">
+                    <p className="text-sm truncate" style={{ color: '#CCCCCC' }}>{b.nome_oferta ?? '—'}</p>
+                    <p className="text-xs" style={{ color: STATUS_APROVADO.includes(b.status) ? '#888888' : '#F87171' }}>
+                      {STATUS_APROVADO.includes(b.status) ? 'Order bump / upsell' : `Order bump (${STATUS_LABEL[b.status] ?? b.status})`}
+                    </p>
+                  </div>
+                  <span className="text-sm shrink-0" style={{ color: STATUS_APROVADO.includes(b.status) ? '#FFFFFF' : '#666666' }}>
+                    {formatMoeda(b.valor_venda, venda.moeda)}
+                  </span>
+                </div>
+              ))}
+              {/* Total */}
+              <div className="flex items-center justify-between gap-3 py-2.5">
+                <span className="text-sm font-semibold" style={{ color: '#FFFFFF' }}>Total da compra</span>
+                <span className="text-base font-bold" style={{ color: '#C9A84C' }}>{formatMoeda(totalCompra, venda.moeda)}</span>
+              </div>
+            </Secao>
+          )}
 
           <Secao titulo="Resumo">
             <Linha label="Status" valor={

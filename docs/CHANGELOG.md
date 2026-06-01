@@ -16,6 +16,41 @@
 
 ---
 
+## [2026-05-31] Fix: aba Webinário — "NO GRUPO" usa histórico da semana — @tiago
+- **O quê:** a métrica **NO GRUPO** do funil da aba Webinário (`WebinarioClient`) deixou de usar o
+  `total_membros` da campanha Sendflow fixa (valor atual, igual em todas as semanas) e passou a usar
+  `grupos_kpis_semana.no_grupo_agora` filtrado por `numero_semana` — o **histórico por semana**, mesma fonte
+  do card "No grupo · Semana N" da página `/grupos`. Removida a constante `CAMPANHA_GRUPO_ID` (sem uso).
+- **Por quê:** o usuário apontou que NO GRUPO aparecia idêntico em todas as semanas (pegava o valor ao vivo da
+  campanha, não o snapshot histórico daquela semana).
+- **Como testou:** `npm run build` limpo. Banco: NO GRUPO agora varia por semana — 175→388, 174→605, 173→925.
+- **Impacto/risco:** baixo — só frontend, uma query trocada na aba Webinário (ainda não em produção).
+- **Docs atualizados:** CHANGELOG, FRONTEND.md.
+
+## [2026-05-31] Feat: agrupar order bumps/upsells da Manager Guru na venda principal — @tiago
+- **O quê:** uma compra com order bumps/upsells deixou de contar como N vendas e passa a contar como **1**
+  (faturamento = soma dos itens aprovados). Nova coluna `vendas.venda_principal_id` (uuid + índice) liga cada
+  bump à transação mãe via `payload.last_transaction.id`.
+- **Banco (migrations 20260531000003/4/5, aplicadas no banco):**
+  - `20260531000003` — `ADD COLUMN venda_principal_id` + índice + **backfill** (151 bumps vinculados; 5 órfãos ficam NULL).
+  - `20260531000004` — `process_venda` preenche `venda_principal_id` (cópia pura do id → funciona mesmo se o bump
+    chega antes da mãe; idempotente via COALESCE no ON CONFLICT).
+  - `20260531000005` — `get_kpis_vendas`: `totalVendas` conta só mães aprovadas; faturamento soma mãe + bumps
+    aprovados (status por linha).
+- **Frontend:** `/vendas` (`page.tsx`, `VendasClient`) lista **1 linha por compra** (`venda_principal_id IS NULL`),
+  com badge **"+N"** na oferta e **valor total** do grupo; `VendaDrawer` ganhou seção "Itens da compra" (mãe + bumps).
+  Dashboards `TpwClient`/`WebinarioClient`: `numVendas` conta só mães (`venda_principal_id == null`); receita inalterada.
+- **Chave de agrupamento (validada no banco):** `last_transaction.id` (156/156 bumps têm; sem cadeias). O
+  `checkout_source` foi descartado (contaminação por email/doc; reutilizado entre dias).
+- **Como testou:** `npm run build` limpo. Banco: caso olivernet (mãe R$1 + 3 bumps) → 3 bumps vinculados,
+  `valor_total_grupo = R$ 692,90`. Dia 31/05: Nº de vendas caiu de **19 → 13** (exatamente os 6 bumps aprovados
+  do dia), faturamento **R$ 1.594,22 inalterado**.
+- **Impacto/risco:** médio — muda contagem de vendas em todo o sistema. Mitigado: faturamento preservado;
+  `webhook-manager-guru` (Edge) e `get_compradores_semana` **não mudaram**; MVs `mv_vendas_*` não existem no banco
+  (estavam só em arquivo) → nada a recriar.
+- **Docs atualizados:** TABELAS (coluna+índice), FUNCOES-SQL (process_venda/get_kpis_vendas), INTEGRACOES
+  (seção Manager Guru), CHANGELOG.
+
 ## [2026-05-31] Feat: aba Webinário do dashboard (funil de 8 passos + KPIs por semana) — @tiago
 - **O quê:** a aba fixa **Webinário** do dashboard deixou de ser placeholder e virou um dashboard real.
   Novo componente `src/app/(autenticado)/dashboard/_components/WebinarioClient.tsx` (Client) ligado em
