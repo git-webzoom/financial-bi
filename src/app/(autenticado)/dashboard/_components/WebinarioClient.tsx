@@ -177,7 +177,7 @@ export default function WebinarioClient() {
         const vFim = rangeVendas.fim_ts    ?? rangeVendas.fim    + 'T23:59:59.999-03:00'
         let q = supabase
           .from('vendas')
-          .select('status, valor_venda, venda_principal_id')
+          .select('id, status, valor_venda, venda_principal_id')
           .gte('data_pedido', vIni)
           .lte('data_pedido', vFim)
         if (regrasVendas.length) q = aplicarRegras(q, regrasVendas)
@@ -233,8 +233,12 @@ export default function WebinarioClient() {
 
       const aprovadas    = (vRows ?? []).filter((v: { status: string }) => STATUS_APROVADO.includes(v.status))
       const receitaBruta = aprovadas.reduce((s: number, v: { valor_venda: number | null }) => s + (v.valor_venda ?? 0), 0)
-      // Conta só a venda mãe (1 por compra); order bumps/upsells (venda_principal_id != null) não contam.
-      const numVendas    = aprovadas.filter((v: { venda_principal_id: string | null }) => v.venda_principal_id == null).length
+      // Conta COMPRAS distintas (1 por compra). Um order bump que passou o filtro mas cuja mãe não
+      // passou (ex.: mãe "Sala VIP Mensal" + bumps WEBN) ainda conta a compra como 1 — mesma régua
+      // da aba Vendas (coalesce(venda_principal_id, id)).
+      const numVendas    = new Set(
+        aprovadas.map((v: { id: string; venda_principal_id: string | null }) => v.venda_principal_id ?? v.id)
+      ).size
 
       setPeriodo(periodoWebn)
       setDados({

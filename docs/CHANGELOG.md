@@ -16,6 +16,20 @@
 
 ---
 
+## [2026-06-01] Fix: Dashboard Webinário conta compras distintas (Nº de Vendas) — @tiago
+- **O quê:** o card **Nº DE VENDAS** da aba Webinário (`WebinarioClient`) mostrava 14 quando o correto é
+  **16** (Semana 174). O **R$ VENDAS** já estava certo (R$ 9.865,80). A contagem usava
+  `venda_principal_id == null` (só mães), perdendo as 2 compras cujo item WEBN é um order bump e a mãe
+  ("Sala VIP Mensal") não tem `WEBN|` — mesmo bug já corrigido na aba Vendas.
+- **Mudança (só `src/app/(autenticado)/dashboard/_components/WebinarioClient.tsx`):** `numVendas` passa a
+  contar **compras distintas** (`Set(coalesce(venda_principal_id, id))`), igual à aba Vendas. Adicionado
+  `id` ao `select` da query de vendas (necessário para a contagem por compra).
+- **O que NÃO mudou:** janela/faturamento (já corretos via `inicio_ts`/`fim_ts`), tráfego, webinário, grupos.
+- **Como testou:** `npx tsc --noEmit` exit 0. Banco (Semana 174, janela 20:00→19:59, filtro WEBN):
+  só-mães = 14 vs compras distintas = **16** / R$ 9.865,80.
+- **Impacto/risco:** baixo — só a contagem do card de vendas do Dashboard; alinha com a aba Vendas.
+- **Docs atualizados:** CHANGELOG.md.
+
 ## [2026-06-01] Fix: corte de hora da semana mantido em TODOS os caminhos de busca de Vendas — @tiago
 - **O quê:** o corte de hora da semana (entidade `webn`, terça 20:00→19:59) só era aplicado no clique do
   seletor de Semana. Ao clicar **Buscar**, trocar o **funil/filtro** ou **paginar**, a busca voltava a usar
