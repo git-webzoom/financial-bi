@@ -39,7 +39,7 @@
 | `integration_tokens` | 11 | Credenciais das integrações. `integration` único; `vault_key` → segredo no Vault; `last_sync_at/status`. |
 | `integration_job_runs` | 13 | Histórico de execução dos jobs (status, registros, duração). ~5.194 linhas. |
 | `meta_ad_accounts` | 8 | Contas de anúncio Meta cadastradas. INSERT dispara sync inicial (trigger). |
-| `semana_config` | 6 | Configuração das semanas (dia/hora de virada em BRT). |
+| `semana_config` | 6 | Configuração das semanas (dia/hora de virada em BRT). 3 entidades: `captacao` (Ter→Ter, rege CRM/Grupos), `webn` (Ter→Ter 20:00, rege Vendas/Webinário), `trafego` (Qua→Ter, rege só o Tráfego — Meta entrega gasto só por data, sem hora). |
 | `webinario_semanas` | 5 | Definição das semanas de webinário (data_inicio / data_evento / fim). |
 | `webinario_semanas_presencas` | 5 | Relação semana ↔ presenças (apoio). |
 | `filtros_personalizados` | 7 | Filtros salvos por módulo (trafego/vendas/...). |

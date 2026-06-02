@@ -27,10 +27,10 @@ A **fonte da verdade é o banco real (Supabase)**, não as migrations locais. Se
 
 ---
 
-## Snapshot do sistema (atualizado em 2026-05-31)
+## Snapshot do sistema (atualizado em 2026-06-02)
 
 - **Stack:** Next.js 14 + Supabase (Postgres + Edge Functions Deno) + Tailwind + Recharts
-- **Tabelas:** 29 · **Funções SQL:** 33 · **Edge Functions:** 9 · **Crons ativos:** 11 · **Rotas API:** 13
+- **Tabelas:** 29 · **Funções SQL:** 34 · **Edge Functions:** 9 · **Crons ativos:** 11 · **Rotas API:** 13
 - **Projeto Supabase:** `zbfcrnsfygovzmncmmjz`
 - **Repositório:** `git-webzoom/financial-bi` (branch `main`)
 

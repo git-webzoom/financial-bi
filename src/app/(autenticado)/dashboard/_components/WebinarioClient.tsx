@@ -122,21 +122,21 @@ export default function WebinarioClient() {
   const semanaCarregada = useRef<number | null>(null)
 
   // Busca os dados de UMA semana. Cada entidade resolve a semana pela SUA própria
-  // definição: tráfego pela semana de captação (date_ref), vendas pela semana de
-  // vendas (data_pedido), webinário pela coluna numero_semana, grupo é valor fixo.
+  // definição: tráfego pela semana de tráfego (date_ref, régua Qua→Ter), vendas pela
+  // semana de vendas (data_pedido), webinário pela coluna numero_semana, grupo é valor fixo.
   const buscarDados = useCallback(async (numeroSemana: number) => {
     setCarregando(true)
     try {
       // Períodos por entidade + período do webinário (para o SeletorSemana)
       // + regras dos filtros personalizados fixos "WEBN" (tráfego) e "WEBN Sem Renov" (vendas).
       const [
-        { data: semCaptRaw },
+        { data: semTrafegoRaw },
         { data: semVendasRaw },
         { data: periodoRaw },
         { data: tRegrasRaw },
         { data: vRegrasRaw },
       ] = await Promise.all([
-        supabase.rpc('listar_semanas_recentes', { p_limit: 60, p_offset: 0 }),
+        supabase.rpc('listar_semanas_trafego', { p_limit: 60, p_offset: 0 }),
         supabase.rpc('listar_semanas_vendas',   { p_limit: 60 }),
         supabase.rpc('get_periodo_semana',      { p_numero: numeroSemana }),
         supabase.from('filtros_personalizados_regras')
@@ -145,13 +145,13 @@ export default function WebinarioClient() {
           .select('campo, operador, valor, ordem').eq('filtro_id', FILTRO_VENDAS_ID).order('ordem'),
       ])
 
-      const semCapt   = (semCaptRaw   ?? []) as SemanaRange[]
-      const semVendas = (semVendasRaw ?? []) as SemanaRange[]
+      const semTrafego = (semTrafegoRaw ?? []) as SemanaRange[]
+      const semVendas  = (semVendasRaw  ?? []) as SemanaRange[]
       const regrasTrafego = (tRegrasRaw ?? []) as RegraFiltro[]
       const regrasVendas  = (vRegrasRaw ?? []) as RegraFiltro[]
 
-      const rangeTrafego = semCapt.find(s => s.numero === numeroSemana)   ?? null
-      const rangeVendas  = semVendas.find(s => s.numero === numeroSemana) ?? null
+      const rangeTrafego = semTrafego.find(s => s.numero === numeroSemana) ?? null
+      const rangeVendas  = semVendas.find(s => s.numero === numeroSemana)  ?? null
       const periodoWebn  = umAsLinha<Periodo>(periodoRaw as Periodo | Periodo[] | null)
 
       // Tráfego (semana de captação, filtro "WEBN") — só consulta se houver range
@@ -267,7 +267,7 @@ export default function WebinarioClient() {
 
       if (!s) {
         const { data: ult } = await supabase
-          .rpc('listar_semanas_recentes', { p_limit: 1, p_offset: 0 })
+          .rpc('listar_semanas_trafego', { p_limit: 1, p_offset: 0 })
         const arr = (ult ?? []) as SemanaRange[]
         s = arr[0]?.numero ?? 1
       }
