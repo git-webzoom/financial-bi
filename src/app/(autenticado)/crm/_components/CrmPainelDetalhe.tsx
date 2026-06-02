@@ -324,6 +324,15 @@ export default function CrmPainelDetalhe({ inscrito, onClose }: Props) {
                   </span>
                 )}
                 <BadgeTemperatura temp={inscrito.temperatura} />
+                {inscrito.lead_faixa && (
+                  <span
+                    className="inline-block px-2 py-0.5 rounded-full text-xs font-bold"
+                    style={{ backgroundColor: '#1A1A1A', color: '#C9A84C' }}
+                    title={inscrito.lead_pontos != null ? `${inscrito.lead_pontos} pontos` : undefined}
+                  >
+                    Lead {inscrito.lead_faixa}{inscrito.lead_pontos != null ? ` · ${inscrito.lead_pontos}` : ''}
+                  </span>
+                )}
                 {inscrito.comprou && (
                   <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#0F2A1A', color: '#4ADE80' }}>
                     ✓ Comprou

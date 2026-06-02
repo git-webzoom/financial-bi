@@ -1,6 +1,6 @@
 # Edge Functions (Deno) — Financial BI
 
-> Fonte: Supabase (9 funções ATIVAS) + `supabase/functions/`, verificado em 2026-05-31.
+> Fonte: Supabase (10 funções ATIVAS) + `supabase/functions/`, verificado em 2026-06-02.
 > ⚠️ São **Deno**, não Node.js: imports por URL, `Deno.env.get(...)`, sem `require`.
 > Ao alterar/deployar uma function: atualize aqui **e** registre no `CHANGELOG.md`.
 
@@ -15,10 +15,14 @@
 | `webhook-manager-guru` | ❌ | Webhook (in) | Manager Guru (POST) | Recebe venda → grava `raw_vendas` → dispara `process_venda`. Idempotente via `idempotency_key`. |
 | `webhook-hotwebnar` | ❌ | Webhook (in) | Hotwebnar (POST) | Recebe presença ao vivo → `upsert_presenca_webn` → `webinario_presencas`. |
 | `webhook-sendflow-grupos` | ❌ | Webhook (in) | Sendflow (POST) | Recebe eventos de entrada/saída de grupo → `sendflow_eventos_grupo`. |
+| `webhook-lead-score` | ❌ | Webhook (in) | **Formulário WEBN (browser do lead, POST)** | Recebe respostas da pesquisa → grava `raw_lead_score` → normaliza nomes do form → `upsert_contato` → `calcular_lead_score` → upsert em `lead_score`. **Tem CORS/OPTIONS** (chamada do navegador). Sem token (valida só `email`). |
 
 ## Notas
 - **`verify_jwt`**: funções com ✅ exigem `Authorization: Bearer <service_role>` (os crons enviam).
   Funções de webhook usam ❌ porque o provedor externo não tem JWT — validam por token próprio no corpo/URL.
+- **`webhook-lead-score` é a única chamada do NAVEGADOR** (formulário da landing), por isso precisa de
+  **CORS** (`Access-Control-Allow-Origin: *`) e responder ao **preflight `OPTIONS`** com 200. As demais
+  são server-to-server e não precisam de CORS. Não tem token (decisão do produto) — valida só `email`.
 - Padrão de busca de token: cada function lê `integration_tokens` + Vault. **Código duplicado** entre elas
   (ver oportunidade de centralização em `PENDENCIAS.md`).
 - Histórico de cada execução fica em `integration_job_runs`.

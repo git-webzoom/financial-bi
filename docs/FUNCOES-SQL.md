@@ -23,17 +23,23 @@
 | `snapshot_membros_inicio_semana` | `p_numero int` | void | Tira foto dos membros no início da semana. |
 | `grupos_fechamento_semana` | — | void | Fecha métricas de grupos. **Roda em cron (a cada 1 min, dispara no momento certo).** |
 
+## Lead Score (WEBN)
+| Função | Args | Retorno | O que faz |
+|--------|------|---------|-----------|
+| `calcular_lead_score` | `p_respostas jsonb` | jsonb | Recebe respostas **já normalizadas** (chave = `variavel` da scorecard), soma `lead_score_pontos` e devolve `{pontos_total, faixa, breakdown}`. Faixas: A+≥104, A≥90, B≥75, C≥53, D<53. Resposta ausente/não listada = 0. `SECURITY DEFINER`. |
+| `get_lead_scores` | `p_contato_ids uuid[]` | json | Scores em lote por array de uuid (POST — evita o bug do `.in()`). Retorna `(contato_id, pontos_total, faixa)` só dos que têm score. Usada no `/crm`. `SECURITY DEFINER`. |
+
 ## Semanas (captação vs webinário — distintos!)
 | Função | Args | Retorno | O que faz |
 |--------|------|---------|-----------|
 | `get_semana_atual` | — | int | Semana de **captação (CRM)** atual. |
-| `get_semana_webnario_ativa` | — | int | Semana de **webinário** ativa. |
-| `get_periodo_semana` | `p_numero int` | TABLE | Datas início/fim/evento da semana. |
-| `ensure_semana_existe` | `p_numero int` | void | Cria a semana de captação se faltar. |
-| `ensure_semana_webnario_existe` | `p_numero int` | void | Cria a semana de webinário se faltar. |
+| `get_semana_webnario_ativa` | — | int | Semana de **webinário** ativa. **Calculada** (mesma fórmula de `listar_semanas_vendas`: `ultima_ocorrencia_brt(config 'webn')` ancorado em `webinario_semanas`, **−1** proposital). **NÃO lê mais** a linha física de `webinario_semanas_presencas`. Garante que Webinário = Vendas sempre. *(Antes lia a linha física e bugava — ver CHANGELOG 2026-06-02.)* |
+| `get_periodo_semana` | `p_numero int, p_entidade text = 'captacao'` | TABLE | Datas início/fim/evento da semana. **`'captacao'` (default):** lê `webinario_semanas` (régua Ter→Ter) — usado pelo **CRM**. **`'webn'`:** **calcula** o período pela régua de vendas/webinário (igual `listar_semanas_vendas`; `data_evento = data_inicio` = ao vivo terça 20:00 BRT) — usado por **`/webnario`** e pela aba Webinário do dashboard. *(A versão antiga de 1 arg foi dropada; o default cobre as chamadas de 1 arg — ver CHANGELOG 2026-06-02.)* |
+| `ensure_semana_existe` | `p_numero int` | void | Cria a semana de **captação** (`webinario_semanas`) se faltar. |
+| `ensure_semana_webnario_existe` | `p_numero int` | void | **No-op desde 2026-06-02** (mantida só porque o cron a chama). Antes criava linhas em `webinario_semanas_presencas` com datas erradas — a semana de webinário agora é **calculada**, não materializada. |
 | `auto_criar_proxima_semana` | — | void | Garante a próxima semana. **Cron a cada 5 min.** |
 | `listar_semanas_recentes` | `p_limit, p_offset` | TABLE | Semanas recentes pela entidade `captacao` (Ter→Ter). Retorna `numero, inicio, fim` (date). Hoje **não há mais consumidor no frontend** (o tráfego migrou para `listar_semanas_trafego`); mantida para compatibilidade/uso futuro de captação. |
-| `listar_semanas_trafego` | `p_limit, p_offset` | TABLE | Semanas para o seletor de **Tráfego** (entidade `trafego`). Cópia de `listar_semanas_recentes` lendo `semana_config('trafego')`: régua **Qua→Ter** (a Meta entrega gasto só por data, sem hora; `trafego.date_ref` é `date` puro). **Mesma numeração** da captação (mesma âncora `webinario_semanas`), só a janela começa um dia depois (quarta). Usada em `/trafego` e no funil de tráfego do dashboard (`WebinarioClient`). |
+| `listar_semanas_trafego` | `p_limit, p_offset` | TABLE | Semanas para o seletor de **Tráfego** (entidade `trafego`). Lê `semana_config('trafego')`: régua **Qua→Ter** (a Meta entrega gasto só por data, sem hora; `trafego.date_ref` é `date` puro). Usa **`floor()`** no cálculo do número (não divisão inteira): como a régua começa na quarta e a âncora `webinario_semanas` é terça, a "última quarta" fica antes da âncora nas terças (dias_diff negativo) — `floor(-6/7)=-1` alinha o número. Assim, numa terça a semana corrente (Qua anterior→Ter de hoje) é a **mesma numeração da captação −1**; a próxima (quarta) iguala a captação. Usada em `/trafego` e no funil de tráfego do dashboard (`WebinarioClient`). *(Antes usava divisão inteira e ficava +1 adiantado nas terças — ver CHANGELOG 2026-06-02.)* |
 | `listar_semanas_vendas` | `p_limit` | TABLE | Semanas para o seletor de Vendas (entidade `webn`). Retorna `numero, inicio, fim` (date) **+ `inicio_ts, fim_ts` (timestamptz)** com o corte de hora real de `semana_config('webn')` em BRT. A numeração é **defasada −1 de propósito** (Vendas/Webinário ficam "uma semana pra trás" vs `listar_semanas_recentes`/`webinario_semanas`). O frontend filtra `data_pedido` por `inicio_ts`/`fim_ts`. |
 
 ## KPIs / consultas

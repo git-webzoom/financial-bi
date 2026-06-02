@@ -29,7 +29,7 @@ export default async function WebnarioPage({
   const semana = searchParams.semana ? parseInt(searchParams.semana, 10) : semanaDefault
   const semanaValida = isNaN(semana) ? semanaDefault : semana
 
-  const { data: periodoRaw } = await supabase.rpc('get_periodo_semana', { p_numero: semanaValida })
+  const { data: periodoRaw } = await supabase.rpc('get_periodo_semana', { p_numero: semanaValida, p_entidade: 'webn' })
   const periodo = Array.isArray(periodoRaw) ? periodoRaw[0] ?? null : periodoRaw ?? null
 
   return (

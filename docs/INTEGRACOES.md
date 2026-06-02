@@ -12,6 +12,7 @@
 | **Sendflow** | Pull | `sendflow.pro/sendapi` | `sendflow_grupos`, `sendflow_metricas` | `job-sendflow-grupos` / `job-sendflow-metricas` |
 | **Sendflow** | Webhook | — | `sendflow_eventos_grupo` | `webhook-sendflow-grupos` |
 | **Hotwebnar** | Webhook | — | `webinario_presencas` | `webhook-hotwebnar` |
+| **Formulário WEBN** | Webhook (in) | — | `raw_lead_score` → `lead_score` | `webhook-lead-score` |
 | **Supabase Auth** | Nativo | — | `profiles` | `handle_new_user` |
 
 ## Manager Guru — order bumps / upsells (agrupamento de vendas)
@@ -24,6 +25,23 @@ A MG envia **1 webhook por transação**. Uma compra com order bumps/upsells ger
 - **Contagem**: 1 venda por grupo (a mãe). **Faturamento**: soma a mãe + bumps **aprovados** (status por linha).
 - Reflete em `get_kpis_vendas`, na página `/vendas` (1 linha por compra, badge "+N", drawer com os itens) e nos
   dashboards (`numVendas` conta só `venda_principal_id IS NULL`). `get_compradores_semana` não muda (agrupa por contato).
+
+## Formulário WEBN — webhook inbound (Lead Score)
+O formulário de pesquisa é uma **página HTML/JS própria na landing** (`financialmove`, **fora deste
+repo**). Ao enviar, ele faz **dois** `fetch` em paralelo:
+1. **ActiveCampaign** (`proc.php`) — como sempre, **intacto**.
+2. **`webhook-lead-score`** (nosso) — envio **adicional**, fire-and-forget (`keepalive: true`,
+   `.catch` engole erro → não afeta o AC nem o redirect do lead).
+
+- **Contrato:** `POST {url}/functions/v1/webhook-lead-score`, JSON `{ email, nome, telefone, respostas{...14...} }`.
+  O form manda os **nomes de campo dele** (`profissional`, `investe_cripto`, `tempo_tasso`, ...); a edge
+  function normaliza para as **variáveis do score** (ver `PLANO-LEAD-SCORE.md` §5, mapa fixo).
+- **Sem token** (decisão do produto): a função valida só que veio `email` (chave que liga ao `contato`).
+- **14 respostas guardadas** em `lead_score.respostas`; **só 10 pontuam** (genero/capital/sonho/
+  diferencial_tasso entram como dado p/ a regressão futura, mas valem 0).
+- **Onde mexer no form:** o `<script>` da landing (3 adições: const `WEBHOOK_BI`, função
+  `avfEnviarLeadScore`, chamada em `avfEnviarFormulario`). Código completo em `PLANO-LEAD-SCORE.md` (Anexo A).
+  **O bloco de envio ao AC não muda.**
 
 ## Detalhes que quebram fácil (atenção)
 - **ActiveCampaign**: depende do **padrão exato da tag** de webinário
