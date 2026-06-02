@@ -268,14 +268,22 @@
   nova seção de config + lib), FUNCOES-SQL.md (trigger `trg_dashboard_abas_updated_at`),
   README.md (snapshot de tabelas), CHANGELOG.
 
-## [2026-06-02] Plano de implementação do Lead Score WEBN — @tiago
-- **O quê:** criado `docs/PLANO-LEAD-SCORE.md` — plano completo (tabelas, RPC de cálculo, edge
-  function webhook, tabela de pontos, exibição no /crm, fases, testes) para outra IA implementar.
-- **Por quê:** padronizar a entrega do lead scoring sem quebrar o sistema atual.
-- **Como verifiquei:** confirmado no banco real que nenhuma das variáveis do modelo existe hoje
-  (`crm`/`webinario_inscritos` sem campos de pesquisa; `raw_crm` vazia). Padrões espelhados de
-  `webhook-hotwebnar`, `raw_tables` e `rls_tabelas_expostas`.
-- **Impacto/risco:** nenhum — é só documentação/planejamento (nada foi implementado ainda).
+## [2026-06-02] Lead Score: plano revisado para webhook DIRETO do formulário — @tiago
+- **O quê:** `docs/PLANO-LEAD-SCORE.md` reescrito. Origem dos dados mudou de "webhook via
+  ActiveCampaign" para "webhook direto do formulário" (landing HTML/JS própria). Agora o contrato do
+  payload é definido por nós (JSON com as 14 respostas); a tabela de pontos foi conferida 1:1 contra
+  os textos reais do form; adicionado tratamento de **CORS/OPTIONS** na Edge Function (é chamada do
+  browser do lead) e o trecho JS a adicionar no formulário (envio paralelo, sem mexer no envio ao AC).
+- **Por quê:** o form é código próprio → controlamos o payload, eliminando a "fase de captura".
+- **Pontos de atenção registrados:** textos de `investe_cripto`/`tempo_tasso` diferem do modelo (usar
+  os do form); **decisão pendente** dos pontos de `valor = R$ 150.000 a R$ 500.000` (proposto -5).
+- **Impacto/risco:** nenhum — só documentação/planejamento.
+- **Docs atualizados:** PLANO-LEAD-SCORE, CHANGELOG.
+
+## [2026-06-02] Plano de implementação do Lead Score WEBN (versão inicial via AC) — @tiago
+- **O quê:** criado `docs/PLANO-LEAD-SCORE.md` — primeira versão (origem via ActiveCampaign).
+  Substituída no mesmo dia pela versão "webhook direto do formulário" (acima).
+- **Impacto/risco:** nenhum — documentação.
 - **Docs atualizados:** PLANO-LEAD-SCORE (novo), README (índice), CHANGELOG.
 
 ## [2026-05-31] CLAUDE.md: seção de comandos comuns — @tiago
