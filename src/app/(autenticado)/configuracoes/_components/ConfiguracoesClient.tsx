@@ -3185,8 +3185,9 @@ interface SemanaConfigRow {
 }
 
 const ENTIDADES_SEMANA: { key: string; label: string; descricao: string }[] = [
-  { key: 'captacao', label: 'Semana captação', descricao: 'Ritmo de captação — define início/fim das semanas para CRM, Grupos e Tráfego' },
+  { key: 'captacao', label: 'Semana captação', descricao: 'Ritmo de captação — define início/fim das semanas para CRM e Grupos' },
   { key: 'webn',     label: 'Semana webn',     descricao: 'Ritmo do evento — define início/fim das semanas para Vendas e Webinário' },
+  { key: 'trafego',  label: 'Semana tráfego',  descricao: 'Ritmo do tráfego (Meta) — define início/fim das semanas apenas do Tráfego. A Meta entrega gasto só por data (dia inteiro).' },
 ]
 
 const DIAS_SEMANA = [
@@ -3366,10 +3367,10 @@ function AbaConfiguracaoSemanas() {
         <p className="text-sm font-medium" style={{ color: '#FFFFFF' }}>Configuração de Semanas</p>
         <p className="text-xs mt-0.5" style={{ color: '#555555' }}>
           Define o dia e hora (horário de Brasília) em que cada semana começa e termina por módulo.
-          Alterações afetam novas semanas criadas e os atalhos de filtro em Vendas e Tráfego.
+          Alterações afetam novas semanas criadas e os seletores de Semana em Vendas, Tráfego, CRM e Grupos.
         </p>
       </div>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {ENTIDADES_SEMANA.map(e => (
           <CardSemanaConfig
             key={e.key}

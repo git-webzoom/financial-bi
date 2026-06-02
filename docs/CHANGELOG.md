@@ -16,6 +16,57 @@
 
 ---
 
+## [2026-06-02] Feat: 3º card "Semana tráfego" na aba Semanas (Configurações) — @tiago
+- **O quê:** a aba **Semanas** em Configurações passou de 2 para **3 cards**. Novo card "Semana
+  tráfego" (entidade `trafego`) permite configurar a régua do tráfego pela tela. A descrição do
+  card de captação foi corrigida (era "CRM, Grupos e Tráfego" → agora "CRM e Grupos", pois o
+  Tráfego saiu da captação na mudança anterior).
+- **Por quê:** complementa o feat anterior do mesmo dia — antes a régua do tráfego ficava fixa
+  no banco; agora é editável na UI como `captacao` e `webn`.
+- **Mudança (só `src/app/(autenticado)/configuracoes/_components/ConfiguracoesClient.tsx`):**
+  +entrada `trafego` em `ENTIDADES_SEMANA`; grid `lg:grid-cols-2` → `lg:grid-cols-3`; subtítulo
+  da aba atualizado. O componente genérico `CardSemanaConfig` (upsert por `onConflict: 'entidade'`)
+  não mudou — já lida com qualquer entidade. **Sem mudança de banco/SQL** (entidade `trafego` e
+  RPC `listar_semanas_trafego` já existiam).
+- **Nota de comportamento:** o card mostra dia + hora (igual aos outros), mas o tráfego filtra
+  `date_ref` por **dia inteiro** — a hora gravada não afeta o filtro; só o dia importa. Régua
+  correta = início Quarta / fim Terça.
+- **Como testou:** `npm run build` → "Compiled successfully", tipos OK; `/configuracoes` compila.
+  Tela (Configurações › Semanas): 3 cards, o de tráfego pré-preenchido com Quarta→Terça do banco.
+- **Impacto/risco:** baixo — só UI da aba Semanas; salvar grava em `semana_config('trafego')` e
+  reflete no seletor de /trafego e no funil do dashboard (via `listar_semanas_trafego`, que lê a
+  config ao vivo).
+- **Docs atualizados:** FRONTEND.md, CHANGELOG.md.
+
+## [2026-06-02] Feat: Semana própria para o Tráfego (Qua→Ter) — @tiago
+- **O quê:** o **Tráfego** ganhou régua de semana própria. Antes seguia a entidade `captacao`
+  (Ter→Ter, junto com CRM/Grupos). Agora usa a nova entidade `trafego` em `semana_config`:
+  início **Quarta (00:00)**, fim **Terça (23:59)** — dias cheios.
+- **Por quê:** a Meta (Meta Ads) entrega gasto/impressões **só por data, sem hora**
+  (`trafego.date_ref` é `date` puro). Como o ciclo do evento (`webn`) vira terça 20:00 e o que
+  foi gasto até 19:59 de terça não conta naquela semana, o tráfego precisa contar de quarta a
+  terça para ficar alinhado ao ciclo. Mantém o **mesmo número** da captação (semana atual 175),
+  só a janela começa um dia depois.
+- **Mudança (banco):** migration `20260602000001_semana_trafego.sql` — INSERT entidade `trafego`
+  (dia_inicio=3, dia_fim=2) + nova RPC `listar_semanas_trafego` (cópia de `listar_semanas_recentes`
+  lendo `semana_config('trafego')`, mesma âncora de numeração `webinario_semanas`). Aplicada no
+  banco real (zbfcrnsfygovzmncmmjz).
+- **Mudança (frontend):** `trafego/page.tsx` e `dashboard/_components/WebinarioClient.tsx` (3 chamadas
+  RPC) trocam `listar_semanas_recentes` → `listar_semanas_trafego`. Variável `semCapt` renomeada para
+  `semTrafego`. Shape de retorno idêntico (`{numero, inicio, fim}`); seletor segue filtrando `date_ref`
+  por dia inteiro.
+- **O que NÃO mudou:** `listar_semanas_recentes` (entidade `captacao`) e `listar_semanas_vendas`
+  (`webn`) intactas; CRM, Grupos, Vendas e Webinário sem alteração; aba "Semanas" em Configurações
+  segue com 2 cards; cron `ensure-proxima-semana` inalterado (numeração-âncora é a mesma).
+- **Como testou:** `npm run build` → "Compiled successfully", tipos OK, 26 páginas. Banco:
+  `listar_semanas_trafego(3,0)` → sem 175 = **27/05 (Qua)→02/06 (Ter)**, sem 174 = **20/05→26/05**;
+  `listar_semanas_recentes`/`listar_semanas_vendas` retornam exatamente o que retornavam antes.
+  Teste de navegador (seletor /trafego e aba Webinário): feito manualmente pelo usuário.
+- **Impacto/risco:** baixo/isolado — `listar_semanas_recentes` era usada **só** pelo tráfego no
+  frontend; CRM/Grupos usam `get_semana_atual`/`get_periodo_semana`/`grupos_kpis_semana`, não essa RPC.
+- **Docs atualizados:** FUNCOES-SQL.md, TABELAS.md, FRONTEND.md, README.md (snapshot 33→34 funções),
+  CHANGELOG.md.
+
 ## [2026-06-01] Fix: Dashboard Webinário conta compras distintas (Nº de Vendas) — @tiago
 - **O quê:** o card **Nº DE VENDAS** da aba Webinário (`WebinarioClient`) mostrava 14 quando o correto é
   **16** (Semana 174). O **R$ VENDAS** já estava certo (R$ 9.865,80). A contagem usava

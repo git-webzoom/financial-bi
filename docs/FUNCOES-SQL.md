@@ -32,7 +32,8 @@
 | `ensure_semana_existe` | `p_numero int` | void | Cria a semana de captação se faltar. |
 | `ensure_semana_webnario_existe` | `p_numero int` | void | Cria a semana de webinário se faltar. |
 | `auto_criar_proxima_semana` | — | void | Garante a próxima semana. **Cron a cada 5 min.** |
-| `listar_semanas_recentes` | `p_limit, p_offset` | TABLE | Semanas recentes (usado nos seletores do frontend). |
+| `listar_semanas_recentes` | `p_limit, p_offset` | TABLE | Semanas recentes pela entidade `captacao` (Ter→Ter). Retorna `numero, inicio, fim` (date). Hoje **não há mais consumidor no frontend** (o tráfego migrou para `listar_semanas_trafego`); mantida para compatibilidade/uso futuro de captação. |
+| `listar_semanas_trafego` | `p_limit, p_offset` | TABLE | Semanas para o seletor de **Tráfego** (entidade `trafego`). Cópia de `listar_semanas_recentes` lendo `semana_config('trafego')`: régua **Qua→Ter** (a Meta entrega gasto só por data, sem hora; `trafego.date_ref` é `date` puro). **Mesma numeração** da captação (mesma âncora `webinario_semanas`), só a janela começa um dia depois (quarta). Usada em `/trafego` e no funil de tráfego do dashboard (`WebinarioClient`). |
 | `listar_semanas_vendas` | `p_limit` | TABLE | Semanas para o seletor de Vendas (entidade `webn`). Retorna `numero, inicio, fim` (date) **+ `inicio_ts, fim_ts` (timestamptz)** com o corte de hora real de `semana_config('webn')` em BRT. A numeração é **defasada −1 de propósito** (Vendas/Webinário ficam "uma semana pra trás" vs `listar_semanas_recentes`/`webinario_semanas`). O frontend filtra `data_pedido` por `inicio_ts`/`fim_ts`. |
 
 ## KPIs / consultas
