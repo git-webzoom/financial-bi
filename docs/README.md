@@ -24,6 +24,7 @@ A **fonte da verdade é o banco real (Supabase)**, não as migrations locais. Se
 | [SCRIPTS.md](SCRIPTS.md) | Scripts de importação manual |
 | [PENDENCIAS.md](PENDENCIAS.md) | Problemas conhecidos, dívidas técnicas e riscos de segurança |
 | [CHANGELOG.md](CHANGELOG.md) | Registro de **toda** mudança feita no sistema |
+| [PLANO-LEAD-SCORE.md](PLANO-LEAD-SCORE.md) | Plano completo de implementação do Lead Score WEBN (a executar) |
 
 ---
 

@@ -268,6 +268,16 @@
   nova seção de config + lib), FUNCOES-SQL.md (trigger `trg_dashboard_abas_updated_at`),
   README.md (snapshot de tabelas), CHANGELOG.
 
+## [2026-06-02] Plano de implementação do Lead Score WEBN — @tiago
+- **O quê:** criado `docs/PLANO-LEAD-SCORE.md` — plano completo (tabelas, RPC de cálculo, edge
+  function webhook, tabela de pontos, exibição no /crm, fases, testes) para outra IA implementar.
+- **Por quê:** padronizar a entrega do lead scoring sem quebrar o sistema atual.
+- **Como verifiquei:** confirmado no banco real que nenhuma das variáveis do modelo existe hoje
+  (`crm`/`webinario_inscritos` sem campos de pesquisa; `raw_crm` vazia). Padrões espelhados de
+  `webhook-hotwebnar`, `raw_tables` e `rls_tabelas_expostas`.
+- **Impacto/risco:** nenhum — é só documentação/planejamento (nada foi implementado ainda).
+- **Docs atualizados:** PLANO-LEAD-SCORE (novo), README (índice), CHANGELOG.
+
 ## [2026-05-31] CLAUDE.md: seção de comandos comuns — @tiago
 - **O quê:** adicionada seção "Comandos comuns" no topo do `CLAUDE.md` (npm install/dev/build/lint/start).
 - **Por quê:** facilitar onboarding; era a única lacuna em relação ao que o `/init` cobriria.
