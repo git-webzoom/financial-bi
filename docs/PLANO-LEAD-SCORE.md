@@ -466,3 +466,220 @@ fetch(WEBHOOK_BI, {
 | 6 | `src/app/(autenticado)/crm/_components/CrmTabela.tsx` (+ `CrmClient.tsx`) | Frontend (coluna aditiva) |
 
 > Numeração das migrations: confirme a última com `list_migrations` e use a sequência seguinte.
+
+---
+
+## ANEXO A — Código do formulário já atualizado (landing, FORA deste repo)
+
+> Este é o `<script>` do formulário **com o envio ao Financial BI já incluído**. O HTML/CSS do
+> formulário **não muda** — só o `<script>`. As 3 adições estão marcadas com `// ===== NOVO =====`:
+> (1) a constante `WEBHOOK_BI`, (2) a função `avfEnviarLeadScore`, (3) a chamada dentro de
+> `avfEnviarFormulario`. **O envio ao ActiveCampaign permanece intacto.**
+>
+> Importante: enquanto a Edge Function `webhook-lead-score` (Fase 4) não estiver no ar, este `fetch`
+> retorna 404 — mas o `.catch` engole o erro e **não afeta** o envio ao AC nem o redirect. Pode publicar
+> o formulário antes do backend; ele passa a registrar score automaticamente quando a function subir.
+
+```html
+<script>
+(function() {
+    let avfStepAtual = 1;
+    const avfTotalSteps = 14;
+
+    // Configuração do Active Campaign
+    const AC_CONFIG = {
+        url: 'https://financialmove.activehosted.com/proc.php?jsonp=true',
+        u: '856',
+        f: '856',
+        or: '211eb0fa-a586-4092-9a82-fd8ecd56e229'
+    };
+
+    // ===== NOVO: webhook do Financial BI (Lead Score) =====
+    const WEBHOOK_BI = 'https://zbfcrnsfygovzmncmmjz.supabase.co/functions/v1/webhook-lead-score';
+
+    // URL de redirect
+    const REDIRECT_URL = 'https://s.financialmove.com.br/grupo-wpp-webn';
+
+    // Mapeamento dos campos para field IDs do AC
+    const FIELD_MAPPING = {
+        'genero': '341',
+        'idade': '342',
+        'escolaridade': '343',
+        'profissional': '344',
+        'renda': '345',
+        'investe_cripto': '392',
+        'valor_investido': '393',
+        'disponivel_mes': '395',
+        'tempo_tasso': '347',
+        'capital': '348',
+        'objetivo_cripto': '349',
+        'dificuldade_cripto': '350',
+        'sonho': '351',
+        'diferencial_tasso': '352'
+    };
+
+    function avfAtualizarProgress() {
+        const stepAtual = document.querySelector("#antivirus-form-container .avf-step.avf-active");
+        const stepNumero = parseInt(stepAtual.dataset.step);
+        const progresso = ((stepNumero - 1) / (avfTotalSteps - 1)) * 100;
+        document.getElementById("avfProgressBar").style.width = progresso + "%";
+    }
+
+    function avfMostrarStep(n) {
+        const steps = document.querySelectorAll("#antivirus-form-container .avf-step");
+        steps.forEach((step) => step.classList.remove("avf-active"));
+        document.querySelector(`#antivirus-form-container [data-step="${n}"]`).classList.add("avf-active");
+        document.getElementById("avfPrevBtn").style.display = n == 1 ? "none" : "inline";
+        document.getElementById("avfNextBtn").innerHTML = n == avfTotalSteps ? "Enviar" : "Avançar";
+        avfAtualizarProgress();
+    }
+
+    function avfPreencherDadosDaURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const nomeUrl = urlParams.get('nome');
+        const emailUrl = urlParams.get('email');
+        const telefoneUrl = urlParams.get('telefone');
+
+        if (nomeUrl) document.querySelector('#antivirus-form-container input[name="nome"]').value = nomeUrl;
+        if (emailUrl) document.querySelector('#antivirus-form-container input[name="email"]').value = emailUrl;
+        if (telefoneUrl) document.querySelector('#antivirus-form-container input[name="telefone"]').value = telefoneUrl;
+    }
+
+    function avfPreencherDadosSeExistir() {
+        const nomeLocalStorage = localStorage.getItem('goesUserNome');
+        const telefoneLocalStorage = localStorage.getItem('goesUserTelefone');
+        const emailLocalStorage = localStorage.getItem('goesUserEmail');
+
+        const nomeInput = document.querySelector('#antivirus-form-container input[name="nome"]');
+        const telefoneInput = document.querySelector('#antivirus-form-container input[name="telefone"]');
+        const emailInput = document.querySelector('#antivirus-form-container input[name="email"]');
+
+        if (!nomeInput.value && nomeLocalStorage) nomeInput.value = nomeLocalStorage;
+        if (!telefoneInput.value && telefoneLocalStorage) telefoneInput.value = telefoneLocalStorage;
+        if (!emailInput.value && emailLocalStorage) emailInput.value = emailLocalStorage;
+    }
+
+    window.avfNavegarStep = function(n) {
+        const stepAtual = document.querySelector("#antivirus-form-container .avf-step.avf-active");
+        const inputs = stepAtual.querySelectorAll("input[required]");
+
+        if (n > 0) {
+            if (!Array.from(inputs).every((input) => {
+                return input.type === "radio" ?
+                    document.querySelector(`#antivirus-form-container input[name="${input.name}"]:checked`) :
+                    input.value.trim();
+            })) {
+                alert("Preencha o campo antes de avançar");
+                return;
+            }
+        }
+
+        const proximoStep = parseInt(stepAtual.dataset.step) + n;
+
+        if (proximoStep > avfTotalSteps) {
+            avfEnviarFormulario();
+            return;
+        }
+
+        if (proximoStep > 0 && proximoStep <= avfTotalSteps) {
+            avfStepAtual = proximoStep;
+            avfMostrarStep(proximoStep);
+        }
+    }
+
+    // ===== NOVO: envia as respostas para o Financial BI (não bloqueia o fluxo) =====
+    function avfEnviarLeadScore(nome, email, telefone) {
+        try {
+            const respostas = {};
+            for (const fieldName of Object.keys(FIELD_MAPPING)) {
+                const selected = document.querySelector(`#antivirus-form-container input[name="${fieldName}"]:checked`);
+                if (selected) respostas[fieldName] = selected.value;
+            }
+            // keepalive: true garante o envio mesmo com o redirect logo em seguida
+            fetch(WEBHOOK_BI, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: email, nome: nome, telefone: telefone, respostas: respostas }),
+                keepalive: true
+            }).catch(function(e) { console.error('lead score webhook:', e); });
+        } catch (e) {
+            console.error('lead score (montagem):', e);
+        }
+    }
+
+    async function avfEnviarFormulario() {
+        const loading = document.getElementById("avf-loading");
+        loading.style.display = "flex";
+
+        const formData = new FormData();
+
+        formData.append('u', AC_CONFIG.u);
+        formData.append('f', AC_CONFIG.f);
+        formData.append('s', '');
+        formData.append('c', '0');
+        formData.append('m', '0');
+        formData.append('act', 'sub');
+        formData.append('v', '2');
+        formData.append('or', AC_CONFIG.or);
+
+        const nome = document.querySelector('#antivirus-form-container input[name="nome"]').value;
+        const email = document.querySelector('#antivirus-form-container input[name="email"]').value;
+        const telefone = document.querySelector('#antivirus-form-container input[name="telefone"]').value;
+
+        // ===== NOVO: dispara o envio para o Financial BI em paralelo =====
+        avfEnviarLeadScore(nome, email, telefone);
+
+        formData.append('email', email);
+        if (nome) formData.append('fullname', nome);
+        if (telefone) formData.append('phone', telefone);
+
+        for (const [fieldName, fieldId] of Object.entries(FIELD_MAPPING)) {
+            const selected = document.querySelector(`#antivirus-form-container input[name="${fieldName}"]:checked`);
+            if (selected) {
+                formData.append(`field[${fieldId}]`, selected.value);
+            }
+        }
+
+        try {
+            await fetch(AC_CONFIG.url, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json' },
+                body: formData
+            });
+            window.location.href = REDIRECT_URL;
+        } catch (error) {
+            console.error('Erro ao enviar:', error);
+            window.location.href = REDIRECT_URL;
+        }
+    }
+
+    // Auto-avança ao selecionar uma opção
+    document.querySelectorAll('#antivirus-form-container input[type="radio"]').forEach((radio) => {
+        radio.addEventListener("change", () => {
+            setTimeout(() => avfNavegarStep(1), 100);
+        });
+    });
+
+    // Enter para avançar
+    document.addEventListener("keypress", function(e) {
+        if (e.key === "Enter" && document.activeElement.closest('#antivirus-form-container')) {
+            e.preventDefault();
+            avfNavegarStep(1);
+        }
+    });
+
+    // Inicialização
+    avfPreencherDadosDaURL();
+    avfPreencherDadosSeExistir();
+    avfMostrarStep(1);
+})();
+</script>
+```
+
+### Notas do Anexo A
+- O contrato enviado por este form bate **exatamente** com a seção 3 (JSON com `email`, `nome`,
+  `telefone`, `respostas{...}`). A Edge Function (Fase 4) faz o `MAP` form-field → variável.
+- `nome`/`email`/`telefone` vêm como **UTM na URL** da página de captura anterior (e/ou localStorage
+  `goesUser*`). Se o lead chegar sem email, a function grava o raw e responde 400 (não pontua) — o
+  form segue normal.
+- **Não** alterar o bloco de envio ao ActiveCampaign.

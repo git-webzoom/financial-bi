@@ -268,6 +268,14 @@
   nova seção de config + lib), FUNCOES-SQL.md (trigger `trg_dashboard_abas_updated_at`),
   README.md (snapshot de tabelas), CHANGELOG.
 
+## [2026-06-02] Lead Score: anexo com o código do formulário atualizado — @tiago
+- **O quê:** adicionado o **Anexo A** ao `docs/PLANO-LEAD-SCORE.md` — o `<script>` completo do
+  formulário já com o envio paralelo ao webhook do Financial BI (constante `WEBHOOK_BI`, função
+  `avfEnviarLeadScore`, chamada em `avfEnviarFormulario`). Envio ao ActiveCampaign intacto.
+- **Por quê:** deixar tudo num lugar só para a outra IA / para quem atualiza a landing.
+- **Impacto/risco:** nenhum — documentação. O código do form é da landing (fora deste repo).
+- **Docs atualizados:** PLANO-LEAD-SCORE (Anexo A), CHANGELOG.
+
 ## [2026-06-02] Lead Score: plano revisado para webhook DIRETO do formulário — @tiago
 - **O quê:** `docs/PLANO-LEAD-SCORE.md` reescrito. Origem dos dados mudou de "webhook via
   ActiveCampaign" para "webhook direto do formulário" (landing HTML/JS própria). Agora o contrato do
