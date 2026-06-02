@@ -31,6 +31,29 @@ function BadgeTemperatura({ temp }: { temp: string | null }) {
   )
 }
 
+// Cores das faixas do Lead Score (alinhadas ao painel WEBN: A+/A verde, B amarelo, C azul, D cinza)
+const FAIXA_CFG: Record<string, { bg: string; text: string }> = {
+  'A+': { bg: '#0F2A1A', text: '#4ADE80' },
+  'A':  { bg: '#0F2A1A', text: '#6EE79A' },
+  'B':  { bg: '#2A1A0F', text: '#FACC15' },
+  'C':  { bg: '#0F1A2A', text: '#60A5FA' },
+  'D':  { bg: '#1A1A1A', text: '#888888' },
+}
+
+function BadgeLeadScore({ faixa, pontos }: { faixa: string | null; pontos: number | null }) {
+  if (!faixa) return <span style={{ color: '#555555' }}>—</span>
+  const cfg = FAIXA_CFG[faixa] ?? { bg: '#1A1A1A', text: '#888888' }
+  return (
+    <span
+      className="inline-block px-2 py-0.5 rounded-full text-xs font-bold"
+      style={{ backgroundColor: cfg.bg, color: cfg.text }}
+      title={pontos != null ? `${pontos} pontos` : undefined}
+    >
+      {faixa}{pontos != null ? ` · ${pontos}` : ''}
+    </span>
+  )
+}
+
 export default function CrmTabela({ inscritos, carregando, onSelecionar }: Props) {
   const [pagina, setPagina] = useState(0)
 
@@ -60,14 +83,14 @@ export default function CrmTabela({ inscritos, carregando, onSelecionar }: Props
     <div>
       {/* Wrapper com scroll horizontal — essencial no mobile */}
       <div className="overflow-x-auto">
-        <div style={{ minWidth: 820 }}>
+        <div style={{ minWidth: 900 }}>
           {/* Cabeçalho */}
           <div
             className="grid text-xs font-semibold uppercase tracking-wide px-5 py-2"
             style={{
               color: '#555555',
               borderBottom: '1px solid #1E1E1E',
-              gridTemplateColumns: '2fr 2fr 1.2fr 1fr 1.5fr 0.8fr 0.6fr 1.2fr 0.8fr',
+              gridTemplateColumns: '2fr 2fr 1.2fr 1fr 1.5fr 0.8fr 0.6fr 0.9fr 1.2fr 0.8fr',
               gap: '0.5rem',
             }}
           >
@@ -78,6 +101,7 @@ export default function CrmTabela({ inscritos, carregando, onSelecionar }: Props
             <span>Campaign</span>
             <span>Medium</span>
             <span>Comprou</span>
+            <span>Lead Score</span>
             <span>Outras Semanas</span>
             <span>Temp.</span>
           </div>
@@ -89,7 +113,7 @@ export default function CrmTabela({ inscritos, carregando, onSelecionar }: Props
               className="grid px-5 py-3 cursor-pointer"
               style={{
                 borderBottom: '1px solid #1E1E1E',
-                gridTemplateColumns: '2fr 2fr 1.2fr 1fr 1.5fr 0.8fr 0.6fr 1.2fr 0.8fr',
+                gridTemplateColumns: '2fr 2fr 1.2fr 1fr 1.5fr 0.8fr 0.6fr 0.9fr 1.2fr 0.8fr',
                 gap: '0.5rem',
                 alignItems: 'center',
               }}
@@ -108,6 +132,9 @@ export default function CrmTabela({ inscritos, carregando, onSelecionar }: Props
                   ? <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#0F2A1A', color: '#4ADE80' }}>✓ Sim</span>
                   : <span style={{ color: '#555555' }}>—</span>
                 }
+              </span>
+              <span>
+                <BadgeLeadScore faixa={i.lead_faixa} pontos={i.lead_pontos} />
               </span>
               <span className="flex flex-wrap gap-1">
                 {i.outras_semanas.slice(0, 5).map(s => (

@@ -22,6 +22,7 @@
 | `sendflow_metricas` | 6 | 20 | Métricas diárias dos grupos (entradas/saídas/cliques). |
 | `sendflow_eventos_grupo` | 8 | 1.829 | Eventos brutos de grupo (entrou/saiu). `evento_id` único. |
 | `grupos_kpis_semana` | 6 | 4 | KPIs agregados de grupos por semana. Recalculado por `upsert_grupos_kpis_semana`. |
+| `lead_score` | 10 | — | **Lead Score WEBN** (tabela de pontos). 1 linha por contato (`UNIQUE(contato_id)`). Guarda `respostas` (as 14 do form), `breakdown` (pontos por variável), `pontos_total`, `faixa` (A+/A/B/C/D). Preenchida pela edge function `webhook-lead-score`. FK `contato_id → contatos`. Lida no `/crm` via `get_lead_scores`. |
 
 ## Tabelas raw (ingestão / idempotência)
 
@@ -30,6 +31,7 @@
 | `raw_vendas` | 7 | 1.196 | Payload bruto de venda (webhook Manager Guru). `idempotency_key` único. Processada por `process_venda`. |
 | `raw_trafego` | 9 | 50.107 | Insights brutos Meta Ads. Processada em lote por `process_raw_trafego_batch` (cron a cada 1 min). |
 | `raw_crm` | 8 | — | Payload bruto de contatos AC. |
+| `raw_lead_score` | 6 | — | Payload bruto do webhook do formulário WEBN (lead score). `processed`/`processed_at`/`error` para auditoria e reprocesso. Gravada sempre (mesmo sem email) pela edge function `webhook-lead-score`. |
 
 ## Tabelas de configuração / sistema
 
@@ -37,6 +39,7 @@
 |--------|------|---------------|
 | `profiles` | 6 | Usuários autenticados. `perfil` = admin / visualizador. Criado por `handle_new_user`. |
 | `integration_tokens` | 11 | Credenciais das integrações. `integration` único; `vault_key` → segredo no Vault; `last_sync_at/status`. |
+| `lead_score_pontos` | 4 | **Scorecard do Lead Score WEBN** (config editável). 51 linhas: `(variavel, resposta)` único → `pontos`. Editável p/ re-score sem mudar código. Lida pela RPC `calcular_lead_score`. |
 | `integration_job_runs` | 13 | Histórico de execução dos jobs (status, registros, duração). ~5.194 linhas. |
 | `meta_ad_accounts` | 8 | Contas de anúncio Meta cadastradas. INSERT dispara sync inicial (trigger). |
 | `semana_config` | 6 | Configuração das semanas (dia/hora de virada em BRT). 3 entidades: `captacao` (Ter→Ter, rege CRM/Grupos), `webn` (Ter→Ter 20:00, rege Vendas/Webinário), `trafego` (Qua→Ter, rege só o Tráfego — Meta entrega gasto só por data, sem hora). |

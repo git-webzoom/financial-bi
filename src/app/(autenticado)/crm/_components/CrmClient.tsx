@@ -41,6 +41,8 @@ export interface InscritoCrm {
   comprou: boolean
   valor_compras_total: number
   outras_semanas: number[]
+  lead_faixa: string | null
+  lead_pontos: number | null
 }
 
 export interface FiltrosCrm {
@@ -76,10 +78,19 @@ async function buscarDadosSemana(
 
   const contatoIds = lista.map((i) => i.contato_id).filter(Boolean) as string[]
 
-  const { data: outrasJson } = contatoIds.length > 0
-    ? await supabase.rpc('get_outras_semanas_contatos', { p_contato_ids: contatoIds, p_numero: numeroSemana })
-    : { data: [] }
+  const [{ data: outrasJson }, { data: scoresJson }] = contatoIds.length > 0
+    ? await Promise.all([
+        supabase.rpc('get_outras_semanas_contatos', { p_contato_ids: contatoIds, p_numero: numeroSemana }),
+        supabase.rpc('get_lead_scores', { p_contato_ids: contatoIds }),
+      ])
+    : [{ data: [] }, { data: [] }]
   const outrasRaw = (outrasJson as unknown as { contato_id: string; numero_semana: number }[]) ?? []
+
+  const scoresRaw = (scoresJson as unknown as { contato_id: string; pontos_total: number; faixa: string }[]) ?? []
+  const scorePorContato: Record<string, { faixa: string; pontos: number }> = {}
+  for (const s of scoresRaw) {
+    scorePorContato[s.contato_id] = { faixa: s.faixa, pontos: s.pontos_total }
+  }
 
   const compradoresSet = new Set((comprasRaw ?? []).map((v: { contato_id: string }) => v.contato_id))
   const totalPorContato: Record<string, number> = {}
@@ -111,6 +122,8 @@ async function buscarDadosSemana(
       numeros_recadastro: i.crm_numeros_recadastro ?? null,
       comprou: compradoresSet.has(contatoId), valor_compras_total: totalPorContato[contatoId] ?? 0,
       outras_semanas: outrasPorContato[contatoId] ?? [],
+      lead_faixa: scorePorContato[contatoId]?.faixa ?? null,
+      lead_pontos: scorePorContato[contatoId]?.pontos ?? null,
     }
   })) as unknown as InscritoCrm[]
 

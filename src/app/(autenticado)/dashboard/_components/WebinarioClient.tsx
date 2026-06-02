@@ -138,7 +138,7 @@ export default function WebinarioClient() {
       ] = await Promise.all([
         supabase.rpc('listar_semanas_trafego', { p_limit: 60, p_offset: 0 }),
         supabase.rpc('listar_semanas_vendas',   { p_limit: 60 }),
-        supabase.rpc('get_periodo_semana',      { p_numero: numeroSemana }),
+        supabase.rpc('get_periodo_semana',      { p_numero: numeroSemana, p_entidade: 'webn' }),
         supabase.from('filtros_personalizados_regras')
           .select('campo, operador, valor, ordem').eq('filtro_id', FILTRO_TRAFEGO_ID).order('ordem'),
         supabase.from('filtros_personalizados_regras')

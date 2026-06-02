@@ -34,7 +34,7 @@ async function buscarDadosSemana(
   await supabase.rpc('ensure_semana_existe', { p_numero: numeroSemana })
 
   const [{ data: periodoRaw }, { data: presencasRaw }, { data: comprasRaw }] = await Promise.all([
-    supabase.rpc('get_periodo_semana', { p_numero: numeroSemana }),
+    supabase.rpc('get_periodo_semana', { p_numero: numeroSemana, p_entidade: 'webn' }),
     supabase
       .from('webinario_presencas')
       .select(`

@@ -16,6 +16,119 @@
 
 ---
 
+## [2026-06-02] Fix: período do Webinário pela régua webn + aposenta linhas físicas — @claude
+- **O quê:**
+  - **`get_periodo_semana`** ganhou o parâmetro `p_entidade text DEFAULT 'captacao'`. Default mantém o
+    comportamento original (lê `webinario_semanas`, régua captação) — **CRM intacto**. Com `'webn'`,
+    **calcula** o período pela régua de vendas/webinário (mesma matemática de `listar_semanas_vendas`;
+    `data_evento = data_inicio`). Migration `20260602000008`.
+  - **Dropada a versão antiga `get_periodo_semana(integer)`** (1 arg), que ficou ambígua (erro 42725)
+    após a sobrecarga. A nova `(integer, text DEFAULT 'captacao')` cobre as chamadas de 1 arg. Migration
+    `20260602000009`.
+  - **Frontend:** 3 chamadas do Webinário passaram a enviar `p_entidade: 'webn'` —
+    `webnario/page.tsx:32`, `webnario/_components/WebnarioClient.tsx:37`,
+    `dashboard/_components/WebinarioClient.tsx:141`. As 2 chamadas do CRM (`crm/page.tsx:28`,
+    `crm/_components/CrmClient.tsx:71`) ficaram como estavam.
+  - **`ensure_semana_webnario_existe` virou no-op** (migration `20260602000010`): o cron
+    `auto_criar_proxima_semana` para de inserir linhas em `webinario_semanas_presencas` (que tinham
+    datas erradas e eram a raiz do bug). A função é mantida porque o cron a chama; só não cria mais nada.
+- **Por quê:** completar o fix de numeração de semanas (entrada anterior). O **número** já estava certo,
+  mas o **período exibido** no seletor de Webinário/Vendas ainda vinha da régua de captação (Ter→Ter),
+  mostrando intervalo deslocado. Agora mostra a régua webn correta (ex: semana 175 = 02/06 20:00 →
+  09/06 19:59 BRT). E a tabela física `webinario_semanas_presencas`, que não é mais fonte de verdade,
+  deixa de receber lixo do cron.
+- **Como testou:** `npm run build` OK (26/26 páginas). Queries no banco real: `get_periodo_semana(175,'webn')`
+  → 02/06 20:00 → 09/06 19:59 BRT; `get_periodo_semana(175)` (1 arg) → 26/05 → 02/06 (idêntico a
+  `webinario_semanas`, sem regressão no CRM); ambiguidade de função resolvida. Painel de sanidade:
+  captação=176, tráfego=175, vendas=175, webinário=175.
+- **Impacto/risco:** **Baixo.** `get_periodo_semana` ganhou param opcional (retrocompatível); a versão de
+  1 arg foi dropada mas o default a substitui. Nenhuma função SQL além do cron usa
+  `ensure_semana_webnario_existe`. As linhas físicas já existentes em `webinario_semanas_presencas`
+  permanecem (inofensivas); só não são mais criadas/atualizadas. Deploy do app necessário (mudança de
+  frontend) — lembrar que o EasyPanel só pega a `main`.
+- **Docs atualizados:** FUNCOES-SQL.md (`get_periodo_semana`, `ensure_semana_webnario_existe`,
+  `ensure_semana_existe`), PENDENCIAS.md (item 1b resolvido parcialmente), CHANGELOG.md.
+
+## [2026-06-02] Fix: numeração de semanas — Webinário e Tráfego desalinhados — @claude
+- **O quê:**
+  - **`get_semana_webnario_ativa()`** reescrita para **calcular** a semana (mesma fórmula de
+    `listar_semanas_vendas`: `ultima_ocorrencia_brt(config 'webn')` ancorado em `webinario_semanas`,
+    com **−1** proposital) em vez de ler a linha física de `webinario_semanas_presencas`. Migration
+    `20260602000006_fix_get_semana_webnario_ativa_calcula.sql`.
+  - **`listar_semanas_trafego()`** passou a usar **`floor()`** no cálculo do número em vez de divisão
+    inteira. Migration `20260602000007_fix_listar_semanas_trafego_floor.sql`.
+  - **Correção de dados:** os inscritos/presenças que caíram na semana **176** do webinário foram
+    movidos para a **175** (`webinario_inscritos`: 3→175; `webinario_presencas`: 80 movidas + 9
+    duplicatas apagadas por colisão com `UNIQUE(contato_id, numero_semana)`). Resultado: 681 inscritos
+    e 135 presenças na 175, **0 na 176**.
+  - **Limpeza:** removida a linha **176 órfã** de `webinario_semanas_presencas` (criada cedo demais) e
+    restaurada `data_fim` da 175 para `data_inicio + 7 dias`.
+- **Por quê:** dois bugs de numeração de semana.
+  1. **Webinário:** mostrava 176 quando o webinário real era 175; leads novos caíam na 176. Causa: a
+     função lia a linha física de `webinario_semanas_presencas`, criada cedo demais por
+     `ensure_semana_webnario_existe` (config 'webn' terça 20:00 vs evento real terça 19:30), o que
+     encurtava a 175 para ~30 min e fazia a função pular para a 176.
+  2. **Tráfego:** mostrava 176 numa terça, quando a semana corrente (Qua 27/05→Ter 02/06) ainda era a
+     175 (a 176 do tráfego só começa quarta 03/06). Causa: divisão inteira truncando `-6/7=0` (deveria
+     ser `-1`) — régua Qua→Ter com âncora na terça gera dias_diff negativo. `floor()` corrige.
+  Webinário e Vendas são a MESMA entidade `webn` e agora dão SEMPRE o mesmo número.
+- **Como testou:** queries no banco real (Supabase). Painel de sanidade pós-fix:
+  `get_semana_atual()=176` (captação), `listar_semanas_trafego(1)=175` (vira 176 quarta 03/06),
+  `listar_semanas_vendas(1)=175`, `get_semana_webnario_ativa()=175`. Simulei a virada de quarta 03/06
+  (tráfego→176, período 03–09/06) e validei `floor` vs divisão inteira para dias_diff de -8 a +14.
+  Conferida a contagem de inscritos/presenças (175 vs 176) antes e depois do move.
+- **Impacto/risco:** **Baixo.** Só 2 funções SQL trocadas (`CREATE OR REPLACE`), sem mudança de
+  assinatura. `get_semana_webnario_ativa` é usada pela Edge Function `webhook-hotwebnar` (presenças do
+  webinário ao vivo) e por `/webnario` — ambas passam a receber 175. Captação e Vendas **não** sofriam
+  o bug do tráfego (régua terça = âncora). **Pendência pré-existente NÃO tocada:** `get_periodo_semana`
+  ainda retorna o período pela régua de captação (`webinario_semanas`), não pela de vendas/webn — ver
+  PENDENCIAS.md. `auto_criar_proxima_semana`/`ensure_semana_webnario_existe` seguem criando linhas
+  físicas, mas elas não afetam mais o NÚMERO da semana ativa.
+- **Docs atualizados:** FUNCOES-SQL.md (linhas `get_semana_webnario_ativa` e `listar_semanas_trafego`),
+  PENDENCIAS.md (novo item sobre as linhas físicas de `webinario_semanas_presencas`), CHANGELOG.md.
+
+## [2026-06-02] Docs: registra defasagem de exibição do Lead Score no /crm — @tiago
+- **O quê:** documentado o comportamento de **timing** do Lead Score: o score é gravado na hora do envio
+  do formulário (via `webhook-lead-score` → `upsert_contato` → `lead_score`, por `contato_id`), mas o lead
+  só aparece na lista do /crm quando o cron do ActiveCampaign (15 min) traz a linha para `crm`. Janela de
+  até ~15 min entre "score no banco" e "lead visível na tela"; quando a linha do `crm` chega, a faixa já
+  aparece preenchida.
+- **Por quê:** evitar que o atraso de exibição seja confundido com bug/perda de dado no futuro.
+- **Como testou:** N/A — só documentação (sem mudança de código/banco).
+- **Impacto/risco:** nenhum. Apenas registro de comportamento já existente e esperado.
+- **Docs atualizados:** FRONTEND.md (linha do /crm), PENDENCIAS.md (item Lead Score), CHANGELOG.md.
+
+## [2026-06-02] Feat: Lead Score WEBN (tabela de pontos) — webhook do formulário + coluna no /crm — @tiago
+- **O quê (tudo aditivo):**
+  - **3 tabelas novas:** `raw_lead_score` (corpo cru do webhook), `lead_score_pontos` (scorecard, 51 linhas
+    seed), `lead_score` (1 linha/contato: respostas, breakdown, pontos_total, faixa A+/A/B/C/D). RLS padrão
+    (SELECT `authenticated` / escrita `service_role`) + trigger `set_updated_at`.
+  - **2 RPCs:** `calcular_lead_score(jsonb)` (soma a scorecard → `{pontos_total, faixa, breakdown}`) e
+    `get_lead_scores(uuid[])` (leitura em lote p/ o /crm via POST — evita o bug do `.in()`).
+  - **Edge Function `webhook-lead-score`** (Deno, `verify_jwt=false`, **com CORS/OPTIONS** — chamada do
+    navegador): grava raw → normaliza nomes do form → `upsert_contato` → `calcular_lead_score` → upsert
+    em `lead_score`.
+  - **Frontend `/crm`:** nova **coluna "Lead Score"** (badge faixa+pontos) em `CrmTabela`, badge no
+    cabeçalho de `CrmPainelDetalhe`, merge por `contato_id` em `CrmClient` (campos opcionais
+    `lead_faixa`/`lead_pontos` em `InscritoCrm`).
+  - **Formulário (landing, FORA deste repo):** adicionar envio paralelo ao webhook (fire-and-forget,
+    `keepalive`); **o envio ao ActiveCampaign não muda**. Código em `PLANO-LEAD-SCORE.md` Anexo A.
+- **Por quê:** priorizar remarketing pelos leads com maior propensão de compra (A+/A concentram ~33% dos
+  compradores). Implementa a **tabela de pontos** (aproximação da regressão ROC-AUC 0.69; correlação ~0.56).
+- **Migrations:** `20260602000002_lead_score_schema`, `..._0003_lead_score_pontos_seed`,
+  `..._0004_calcular_lead_score`, `..._0005_get_lead_scores` (aplicadas no banco **e** versionadas).
+- **Como testou (de verdade):** seed conferido (51 linhas, min/max por variável); RPC `calcular_lead_score`
+  em 6 casos (61→C do plano, 125→A+, -33→D, resposta inexistente→0, vazio→0/D, valor -5); webhook via curl:
+  **OPTIONS→200+CORS**, POST UTF-8→`167/A+`, re-envio→atualiza (1 linha, onConflict), sem-email→400+grava raw,
+  JSON inválido→400; `get_lead_scores` (null sem match, shape correto com match); `npm run build` → "Compiled
+  successfully"; lint dos arquivos novos sem warnings (os 3 do `CrmPainelDetalhe` são pré-existentes). Dados
+  de teste limpos do banco.
+- **Impacto/risco:** baixo — **nada existente foi tocado** (crm, process_venda, crons, edge functions, envio
+  ao AC: intactos). Lead sem score → "—" no /crm (não quebra). Edge function deployada (v1). **Falta** a Fase 5
+  no ar (publicar o `<script>` atualizado na landing) p/ os scores começarem a popular com leads reais.
+- **Docs atualizados:** TABELAS.md, FUNCOES-SQL.md, EDGE-FUNCTIONS.md, INTEGRACOES.md, FRONTEND.md,
+  PENDENCIAS.md, README.md (snapshot), CHANGELOG.md.
+
 ## [2026-06-02] Feat: 3º card "Semana tráfego" na aba Semanas (Configurações) — @tiago
 - **O quê:** a aba **Semanas** em Configurações passou de 2 para **3 cards**. Novo card "Semana
   tráfego" (entidade `trafego`) permite configurar a régua do tráfego pela tela. A descrição do

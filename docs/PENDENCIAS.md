@@ -24,6 +24,16 @@
    subir a imagem base para Node 20 LTS no EasyPanel (Nixpacks: `NIXPACKS_NODE_VERSION=20` ou config equivalente).
 
 ## 🟡 Dívidas técnicas (sem urgência, sem quebra)
+1b. **Tabela `webinario_semanas_presencas` é legado** (desde 2026-06-02 — em grande parte resolvido).
+   `get_semana_webnario_ativa` e `get_periodo_semana(_,'webn')` agora **calculam** (não leem essa tabela),
+   e `ensure_semana_webnario_existe` virou **no-op** (o cron parou de inserir linhas erradas).
+   **Resta como dívida menor:**
+   - As **linhas antigas** já gravadas em `webinario_semanas_presencas` permanecem (inofensivas; nada
+     mais as lê de forma relevante). Pode-se eventualmente **dropar a tabela** e remover a chamada a
+     `ensure_semana_webnario_existe` de `auto_criar_proxima_semana` (limpeza, sem urgência).
+   - `get_periodo_semana` (caminho `'captacao'`, default) ainda mantém um `UNION ALL` com
+     `webinario_semanas_presencas` como fallback histórico; só dispara se a semana existir **apenas** lá.
+     Pode ser simplificado quando a tabela for dropada.
 2. **`getToken()` duplicado** nas Edge Functions (meta-ads, sendflow, activecampaign, manager-guru).
    Cada uma reimplementa a busca de token. Centralizar em `supabase/functions/_shared/` reduziria erro.
    Cuidado: assinaturas diferem (algumas precisam de `config`/`expires_at`).
@@ -39,6 +49,26 @@
    para ambos. A fonte da verdade é o banco (a config é gerenciada pela UI), mas um rebuild a partir das migrations
    reintroduziria os valores antigos. Avaliar: ou parar de versionar os valores em migration, ou criar uma migration
    de reconciliação quando a config estabilizar. Hoje não quebra — só atenção em recriação do banco.
+
+8. **Lead Score: só a tabela de pontos (falta a regressão logística completa).** Hoje o `/crm`
+   usa a **scorecard** (`lead_score_pontos` + `calcular_lead_score`), aproximação interpretável
+   (correlação ~0.56 com o modelo). O modelo estatístico real é uma **regressão logística** (ROC-AUC 0.69)
+   — implementá-la exige exportar coeficientes/intercepto do Python e portar o cálculo (sigmoid + calibração).
+   Evolução futura, fora do escopo atual.
+   - **Reprocessar o modelo a cada 3–4 edições do WEBN** ou quando acumular +100 compradores novos
+     (o score envelhece com o comportamento da base).
+   - **Decisão registrada (`valor` = `R$ 150.000 a R$ 500.000` → -5):** essa faixa não tinha pontuação no
+     modelo original (coeficiente da regressão fortemente negativo, ~-1.23); foi definida em **-5** (mesma
+     banda de "Acima de R$ 500.000"). As faixas "Até R$ 50 mil"/"Entre R$500K e R$1M"/"Mais que R$5M" do
+     modelo **não existem no formulário** — ignoradas. Ver `PLANO-LEAD-SCORE.md` §5.
+   - **30,8% dos leads não respondem a pesquisa** → score cai num default perto da média (campos ausentes
+     = 0 ponto). Quanto mais completo o form, mais preciso o score.
+   - **Defasagem de exibição no /crm (esperado, não é bug):** o score é gravado **na hora** do envio do
+     formulário (ligado ao `contato_id` via `upsert_contato`), mas o lead só aparece na lista do /crm quando
+     o **cron do ActiveCampaign** (a cada 15 min) traz a linha dele para a tabela `crm`. Janela de até ~15 min
+     entre "score no banco" e "lead visível na tela". Quando a linha do `crm` chega, a faixa já aparece
+     preenchida. Se algum dia for preciso ver o lead na hora, a fonte seria `lead_score`/`contatos` (que já têm
+     o dado imediato), não o `crm`.
 
 ## 🟢 Resolvidos / esclarecidos
 - ✅ **RLS habilitado nas 5 tabelas que estavam expostas à `anon` key** (2026-05-31):

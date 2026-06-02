@@ -5,7 +5,20 @@
       "mcp__supabase__get_project_url",
       "mcp__supabase__get_publishable_keys",
       "mcp__supabase__list_tables",
-      "mcp__supabase__execute_sql"
+      "mcp__supabase__execute_sql",
+      "Bash(npm run *)",
+      "Bash(git stash *)",
+      "Bash(netstat -ano)",
+      "Bash(curl -s http://localhost:3000/vendas)",
+      "Bash(echo \"---exit:$?---\")",
+      "Bash(taskkill //PID 1052 //F)",
+      "Bash(NODE_OPTIONS=\"--max-old-space-size=6144\" npm run build)",
+      "Read(//tmp/**)",
+      "Bash(NODE_OPTIONS=\"--max-old-space-size=8192\" npm run build)",
+      "Bash(git checkout *)",
+      "mcp__github__create_pull_request",
+      "Bash(gh pr *)",
+      "Bash(git pull *)"
     ]
   },
   "hooks": {
