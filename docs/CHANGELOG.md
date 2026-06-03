@@ -16,6 +16,36 @@
 
 ---
 
+## [2026-06-03] Re-score em lote do Lead Score (RPC + botão no /crm) — @claude
+- **O quê:**
+  - Nova função SQL **`reprocessar_lead_scores()`** (migration
+    `20260603143000_reprocessar_lead_scores.sql`). Recalcula TODOS os leads de `lead_score` com os
+    pontos atuais da scorecard, a partir das respostas já guardadas em `lead_score.respostas` —
+    sem reenviar formulário. Sobrescreve `pontos_total/faixa/breakdown` só onde mudou e devolve
+    `{total_processados, pontos_mudaram, faixas_mudaram}`. Reaproveita `calcular_lead_score()`.
+  - **Frontend:** botão **"Recalcular scores"** no `/crm` (`CrmClient.tsx`, cabeçalho "Inscritos da
+    Semana", ao lado do Exportar CSV). Pede `confirm()`, chama a RPC, mostra aviso inline com o
+    resultado e recarrega a semana visível. Aditivo — não mexe em Props/colunas existentes.
+- **Por quê:** o score é congelado no momento do envio (webhook). Se a tabela `lead_score_pontos`
+  for editada, os leads antigos não recalculavam — a base misturava régua velha e nova. Pendência
+  já prevista no `docs/PLANO-LEAD-SCORE.md` (seção 9, "reprocessar modelo a cada 3–4 edições").
+  O botão dá a alavanca pela tela (o usuário perguntou onde isso apareceria no frontend).
+- **Como testou:** no banco real (50 leads):
+  - **Idempotência:** `SELECT reprocessar_lead_scores();` → `pontos_mudaram=0, faixas_mudaram=0`.
+  - **Mudança reversível:** `BEGIN; UPDATE lead_score_pontos SET pontos=pontos+5 WHERE variavel='renda';
+    SELECT reprocessar_lead_scores(); ROLLBACK;` → reportou `50 pontos / 9 faixas` mudaram; após
+    ROLLBACK o ponto de `renda Acima de R$20.000` voltou a 25 e o re-score voltou a 0 mudanças.
+  - **Integridade pós-reprocesso:** `SUM(breakdown)==pontos_total` (0 divergências) e
+    `faixa==regra de corte` (0 divergências) em 50 leads.
+  - **Frontend:** `npm run build` OK (26/26 páginas, types válidos; `/crm` 16.5→16.9 kB).
+- **Impacto/risco:** **aditivo** — nenhuma tabela/função/cron/edge function existente foi tocada.
+  Disparo pelo botão (qualquer usuário logado — `EXECUTE` da RPC liberado a `authenticated`) com
+  confirmação. ⚠️ **Acoplamento:** a função replica o MAP form→variável da Edge Function
+  `webhook-lead-score/index.ts` (SQL não lê o TS); se aquele MAP mudar, atualizar esta função
+  junto — documentado em comentário na migration e em `FUNCOES-SQL.md`.
+- **Docs atualizados:** `FUNCOES-SQL.md` (nova RPC na seção Lead Score), `FRONTEND.md` (botão no
+  `/crm`), `PENDENCIAS.md` (pendência de reprocesso marcada como atendida — o gatilho agora é o botão).
+
 ## [2026-06-02] Fix: período do Webinário pela régua webn + aposenta linhas físicas — @claude
 - **O quê:**
   - **`get_periodo_semana`** ganhou o parâmetro `p_entidade text DEFAULT 'captacao'`. Default mantém o

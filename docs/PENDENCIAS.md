@@ -57,6 +57,12 @@
    Evolução futura, fora do escopo atual.
    - **Reprocessar o modelo a cada 3–4 edições do WEBN** ou quando acumular +100 compradores novos
      (o score envelhece com o comportamento da base).
+     - ✅ **Re-score em lote criado (2026-06-03):** RPC `reprocessar_lead_scores()` recalcula todos
+       os leads com os pontos atuais da scorecard (a partir de `lead_score.respostas`). **Gatilho:**
+       botão **"Recalcular scores"** no `/crm` (ao lado do Exportar CSV) — ou `SELECT
+       reprocessar_lead_scores();` no SQL. Rodar **depois de editar `lead_score_pontos`**. Ver
+       `FUNCOES-SQL.md`, `FRONTEND.md` e o CHANGELOG. Sem cron/trigger automático (por decisão).
+       Obs.: editar a própria tabela `lead_score_pontos` ainda é via SQL (não há tela para a scorecard).
    - **Decisão registrada (`valor` = `R$ 150.000 a R$ 500.000` → -5):** essa faixa não tinha pontuação no
      modelo original (coeficiente da regressão fortemente negativo, ~-1.23); foi definida em **-5** (mesma
      banda de "Acima de R$ 500.000"). As faixas "Até R$ 50 mil"/"Entre R$500K e R$1M"/"Mais que R$5M" do

@@ -28,6 +28,7 @@
 |--------|------|---------|-----------|
 | `calcular_lead_score` | `p_respostas jsonb` | jsonb | Recebe respostas **já normalizadas** (chave = `variavel` da scorecard), soma `lead_score_pontos` e devolve `{pontos_total, faixa, breakdown}`. Faixas: A+≥104, A≥90, B≥75, C≥53, D<53. Resposta ausente/não listada = 0. `SECURITY DEFINER`. |
 | `get_lead_scores` | `p_contato_ids uuid[]` | json | Scores em lote por array de uuid (POST — evita o bug do `.in()`). Retorna `(contato_id, pontos_total, faixa)` só dos que têm score. Usada no `/crm`. `SECURITY DEFINER`. |
+| `reprocessar_lead_scores` | — | jsonb | **Re-score em lote manual.** Recalcula TODOS os leads de `lead_score` com os pontos ATUAIS da scorecard, a partir das respostas já guardadas (`lead_score.respostas`). Use depois de editar `lead_score_pontos`. Sobrescreve `pontos_total/faixa/breakdown` só onde mudou. Devolve `{total_processados, pontos_mudaram, faixas_mudaram}`. Idempotente (rodar sem editar = 0 mudanças). `SECURITY DEFINER`. ⚠️ **Acoplamento:** renormaliza os nomes de campo do form → variáveis da scorecard usando o **mesmo MAP** da Edge Function `webhook-lead-score/index.ts` — se aquele MAP mudar, esta função precisa mudar junto. |
 
 ## Semanas (captação vs webinário — distintos!)
 | Função | Args | Retorno | O que faz |

@@ -140,6 +140,8 @@ export default function CrmClient({ semanaAtual, semanaInicial, periodoInicial }
   const [inscritos, setInscritos] = useState<InscritoCrm[]>([])
   const [carregando, setCarregando] = useState(true)
   const [inscritoSelecionado, setInscritoSelecionado] = useState<InscritoCrm | null>(null)
+  const [reprocessando, setReprocessando] = useState(false)
+  const [avisoRescore, setAvisoRescore] = useState<string | null>(null)
   const semanaCarregada = useRef<number | null>(null)
 
   const [filtros, setFiltros] = useState<FiltrosCrm>({
@@ -182,6 +184,39 @@ export default function CrmClient({ semanaAtual, semanaInicial, periodoInicial }
     params.set('semana', String(novaS))
     router.push(`?${params.toString()}`, { scroll: false })
   }, [supabase, router, searchParams])
+
+  // Re-score em lote: recalcula TODOS os leads com os pontos atuais da scorecard
+  // (RPC reprocessar_lead_scores). Use após editar lead_score_pontos. Recarrega a
+  // semana atual ao final para os badges refletirem os scores novos.
+  const recalcularScores = useCallback(async () => {
+    if (reprocessando) return
+    if (!window.confirm(
+      'Recalcular o Lead Score de TODOS os leads?\n\n' +
+      'Isso SÓ precisa ser feito se os valores de pontuação foram alterados. ' +
+      'Se a pontuação não mudou, não há necessidade de recalcular (o resultado será o mesmo).\n\n' +
+      'Deseja continuar?'
+    )) return
+
+    setReprocessando(true)
+    setAvisoRescore(null)
+    const { data, error } = await supabase.rpc('reprocessar_lead_scores')
+    if (error) {
+      setReprocessando(false)
+      setAvisoRescore('Erro ao recalcular. Tente novamente.')
+      return
+    }
+
+    const r = (data ?? {}) as { total_processados?: number; pontos_mudaram?: number; faixas_mudaram?: number }
+    setAvisoRescore(
+      `${r.total_processados ?? 0} leads reprocessados · ${r.pontos_mudaram ?? 0} com pontos alterados · ${r.faixas_mudaram ?? 0} mudaram de faixa.`
+    )
+
+    // recarrega a semana visível para refletir os novos scores
+    const { periodo: p, inscritos: i } = await buscarDadosSemana(supabase, semana)
+    setPeriodo(p)
+    setInscritos(i)
+    setReprocessando(false)
+  }, [supabase, semana, reprocessando])
 
   const inscritosFiltrados = useMemo(() => {
     return inscritos.filter((i) => {
@@ -233,36 +268,54 @@ export default function CrmClient({ semanaAtual, semanaInicial, periodoInicial }
               {inscritosFiltrados.length} de {inscritos.length} inscritos
             </p>
           </div>
-          <button
-            onClick={() => {
-              const BOM = '﻿'
-              const cabecalho = ['nome','email','telefone','data_cadastro','utm_source','utm_campaign','utm_medium','utm_content','utm_term','utm_id','temperatura','estado','cidade','comprou','valor_compras_total','semanas_participou']
-              const linhas = inscritosFiltrados.map(i => [
-                i.nome ?? '', i.email, i.telefone ?? '', i.data_cadastro ?? '',
-                i.utm_source ?? '', i.utm_campaign ?? '', i.utm_medium ?? '',
-                i.utm_content ?? '', i.utm_term ?? '', i.utm_id ?? '',
-                i.temperatura ?? '', i.estado ?? '', i.cidade ?? '',
-                i.comprou ? 'Sim' : 'Não',
-                String(i.valor_compras_total),
-                [semana, ...i.outras_semanas].join(';'),
-              ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
-              const csv = BOM + [cabecalho.join(','), ...linhas].join('\n')
-              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              const d = new Date()
-              a.href = url
-              a.download = `inscritos-semana-${semana}-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.csv`
-              a.click()
-              URL.revokeObjectURL(url)
-            }}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg transition-opacity"
-            style={{ backgroundColor: '#C9A84C', color: '#000000' }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A'}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C'}
-          >
-            Exportar CSV
-          </button>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {avisoRescore && (
+              <span className="text-xs px-2.5 py-1 rounded-md" style={{ backgroundColor: '#0F1A2A', color: '#60A5FA' }}>
+                {avisoRescore}
+              </span>
+            )}
+            <button
+              onClick={recalcularScores}
+              disabled={reprocessando}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ backgroundColor: '#1A1A1A', color: '#C9A84C', border: '1px solid #333333' }}
+              onMouseEnter={e => { if (!reprocessando) (e.currentTarget as HTMLElement).style.borderColor = '#C9A84C' }}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = '#333333'}
+              title="Recalcula o Lead Score de todos os leads com a pontuação atual. Use após editar a tabela de pontos."
+            >
+              {reprocessando ? 'Recalculando…' : 'Recalcular scores'}
+            </button>
+            <button
+              onClick={() => {
+                const BOM = '﻿'
+                const cabecalho = ['nome','email','telefone','data_cadastro','utm_source','utm_campaign','utm_medium','utm_content','utm_term','utm_id','temperatura','estado','cidade','comprou','valor_compras_total','semanas_participou']
+                const linhas = inscritosFiltrados.map(i => [
+                  i.nome ?? '', i.email, i.telefone ?? '', i.data_cadastro ?? '',
+                  i.utm_source ?? '', i.utm_campaign ?? '', i.utm_medium ?? '',
+                  i.utm_content ?? '', i.utm_term ?? '', i.utm_id ?? '',
+                  i.temperatura ?? '', i.estado ?? '', i.cidade ?? '',
+                  i.comprou ? 'Sim' : 'Não',
+                  String(i.valor_compras_total),
+                  [semana, ...i.outras_semanas].join(';'),
+                ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+                const csv = BOM + [cabecalho.join(','), ...linhas].join('\n')
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                const d = new Date()
+                a.href = url
+                a.download = `inscritos-semana-${semana}-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.csv`
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg transition-opacity"
+              style={{ backgroundColor: '#C9A84C', color: '#000000' }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#E2C06A'}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#C9A84C'}
+            >
+              Exportar CSV
+            </button>
+          </div>
         </div>
 
         <CrmFiltros
