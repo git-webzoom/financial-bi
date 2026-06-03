@@ -8,18 +8,23 @@ import { aplicarRegras } from '@/lib/filtros-personalizados'
 import type { RegraFiltro } from '@/lib/filtros-personalizados'
 import SeletorSemana from '@/app/(autenticado)/crm/_components/SeletorSemana'
 import LeadScoreGraficoSemana from './LeadScoreGraficoSemana'
+import TabelaVendasMini from './TabelaVendasMini'
+import { montarComprasFiltradas } from '@/lib/agrupar-compras'
+import type { Venda } from '@/app/(autenticado)/vendas/_components/VendasClient'
 
 interface WebinarioDados {
-  investido:        number
-  impressions:      number
-  linkClicks:       number
-  landingPageViews: number
-  receitaBruta:     number
-  numVendas:        number
-  leads:            number
-  noGrupo:          number
-  showUp:           number
-  pitch:            number
+  investido:         number
+  impressions:       number
+  linkClicks:        number
+  landingPageViews:  number
+  checkoutsInitiated: number
+  receitaBruta:      number
+  numVendas:         number
+  leads:             number
+  noGrupo:           number
+  showUp:            number
+  pitch:             number
+  vendas:            Venda[]
 }
 
 interface Periodo {
@@ -54,10 +59,10 @@ function KpiCard({ label, valor, carregando }: { label: string; valor: string; c
   )
 }
 
-// ─── Funil (8 passos) ──────────────────────────────────────────────────────────
+// ─── Funil (9 passos) ──────────────────────────────────────────────────────────
 
-// 8 larguras decrescentes para o funil parecer um funil de verdade.
-const FUNIL_WIDTHS = [100, 88, 76, 64, 53, 43, 34, 26]
+// 9 larguras decrescentes para o funil parecer um funil de verdade.
+const FUNIL_WIDTHS = [100, 88, 76, 64, 53, 43, 34, 26, 20]
 
 function Funil({ steps, carregando }: { steps: FunilStep[]; carregando: boolean }) {
   return (
@@ -160,7 +165,7 @@ export default function WebinarioClient() {
       if (rangeTrafego) {
         let q = supabase
           .from('trafego')
-          .select('amount_spent, impressions, link_clicks, landing_page_views')
+          .select('amount_spent, impressions, link_clicks, landing_page_views, checkouts_initiated')
           .gte('date_ref', rangeTrafego.inicio)
           .lte('date_ref', rangeTrafego.fim)
         if (regrasTrafego.length) q = aplicarRegras(q, regrasTrafego)
@@ -178,7 +183,7 @@ export default function WebinarioClient() {
         const vFim = rangeVendas.fim_ts    ?? rangeVendas.fim    + 'T23:59:59.999-03:00'
         let q = supabase
           .from('vendas')
-          .select('id, status, valor_venda, venda_principal_id')
+          .select('id, data_pedido, data_aprovacao, nome_contato, email_contato, telefone_contato, nome_oferta, produto_id, oferta_id, marketplace, status, pagamento, parcelas, moeda, valor_venda, valor_liquido, utm_source, utm_campaign, utm_medium, utm_content, venda_principal_id')
           .gte('data_pedido', vIni)
           .lte('data_pedido', vFim)
         if (regrasVendas.length) q = aplicarRegras(q, regrasVendas)
@@ -222,14 +227,15 @@ export default function WebinarioClient() {
       ] = await Promise.all([trafegoQ, vendasQ, leadsQ, showUpQ, pitchQ, grupoQ])
 
       const trafego = (tRows ?? []).reduce(
-        (acc: { investido: number; impressions: number; linkClicks: number; landingPageViews: number },
-          r: { amount_spent: number | null; impressions: number | null; link_clicks: number | null; landing_page_views: number | null }) => ({
-          investido:        acc.investido        + (r.amount_spent       ?? 0),
-          impressions:      acc.impressions      + (r.impressions        ?? 0),
-          linkClicks:       acc.linkClicks       + (r.link_clicks        ?? 0),
-          landingPageViews: acc.landingPageViews + (r.landing_page_views ?? 0),
+        (acc: { investido: number; impressions: number; linkClicks: number; landingPageViews: number; checkoutsInitiated: number },
+          r: { amount_spent: number | null; impressions: number | null; link_clicks: number | null; landing_page_views: number | null; checkouts_initiated: number | null }) => ({
+          investido:         acc.investido         + (r.amount_spent        ?? 0),
+          impressions:       acc.impressions       + (r.impressions         ?? 0),
+          linkClicks:        acc.linkClicks        + (r.link_clicks         ?? 0),
+          landingPageViews:  acc.landingPageViews  + (r.landing_page_views  ?? 0),
+          checkoutsInitiated: acc.checkoutsInitiated + (r.checkouts_initiated ?? 0),
         }),
-        { investido: 0, impressions: 0, linkClicks: 0, landingPageViews: 0 }
+        { investido: 0, impressions: 0, linkClicks: 0, landingPageViews: 0, checkoutsInitiated: 0 }
       )
 
       const aprovadas    = (vRows ?? []).filter((v: { status: string }) => STATUS_APROVADO.includes(v.status))
@@ -241,6 +247,15 @@ export default function WebinarioClient() {
         aprovadas.map((v: { id: string; venda_principal_id: string | null }) => v.venda_principal_id ?? v.id)
       ).size
 
+      // Lista 1 linha por COMPRA (mesma fonte/filtro/status dos KPIs acima) para a tabela.
+      const compras = await montarComprasFiltradas<Venda>(
+        (aprovadas as unknown as Venda[]),
+        async (ids) => {
+          const { data } = await supabase.from('vendas').select('*').in('id', ids)
+          return (data as Venda[]) ?? []
+        },
+      )
+
       setPeriodo(periodoWebn)
       setDados({
         ...trafego,
@@ -250,6 +265,7 @@ export default function WebinarioClient() {
         showUp:    showUpCount ?? 0,
         pitch:     pitchCount  ?? 0,
         noGrupo:   (grupoRow as { no_grupo_agora: number | null } | null)?.no_grupo_agora ?? 0,
+        vendas:    compras,
       })
     } finally {
       setCarregando(false)
@@ -290,9 +306,10 @@ export default function WebinarioClient() {
     buscarDados(novaS)
   }, [buscarDados])
 
-  const inv = dados?.investido    ?? 0
-  const rec = dados?.receitaBruta ?? 0
-  const num = dados?.numVendas    ?? 0
+  const inv   = dados?.investido    ?? 0
+  const rec   = dados?.receitaBruta ?? 0
+  const num   = dados?.numVendas    ?? 0
+  const leads = dados?.leads        ?? 0
 
   const kpis = [
     { label: 'R$ Tráfego',   valor: formatMoeda(inv)                            },
@@ -300,6 +317,7 @@ export default function WebinarioClient() {
     { label: 'Nº de Vendas', valor: fmtNum(num)                                 },
     { label: 'Ticket Médio', valor: formatMoeda(num > 0 ? rec / num : 0)        },
     { label: 'CPA',          valor: formatMoeda(num > 0 ? inv / num : 0)        },
+    { label: 'CPL',          valor: formatMoeda(leads > 0 ? inv / leads : 0)    },
     { label: 'ROAS',         valor: (inv > 0 ? rec / inv : 0).toFixed(2) + 'x' },
   ]
 
@@ -310,8 +328,9 @@ export default function WebinarioClient() {
     { label: 'LEADS',           valor: dados?.leads            ?? 0, formatado: fmtNum(dados?.leads            ?? 0) },
     { label: 'NO GRUPO',        valor: dados?.noGrupo          ?? 0, formatado: fmtNum(dados?.noGrupo          ?? 0) },
     { label: 'SHOW UP',         valor: dados?.showUp           ?? 0, formatado: fmtNum(dados?.showUp           ?? 0) },
-    { label: 'PITCH',           valor: dados?.pitch            ?? 0, formatado: fmtNum(dados?.pitch            ?? 0) },
-    { label: 'Nº VENDAS',       valor: dados?.numVendas        ?? 0, formatado: fmtNum(dados?.numVendas        ?? 0) },
+    { label: 'PITCH',           valor: dados?.pitch              ?? 0, formatado: fmtNum(dados?.pitch              ?? 0) },
+    { label: 'CHECKOUT INICIADO', valor: dados?.checkoutsInitiated ?? 0, formatado: fmtNum(dados?.checkoutsInitiated ?? 0) },
+    { label: 'Nº VENDAS',       valor: dados?.numVendas          ?? 0, formatado: fmtNum(dados?.numVendas          ?? 0) },
   ]
 
   return (
@@ -337,6 +356,9 @@ export default function WebinarioClient() {
 
           {/* Distribuição de Lead Score por nota dos captados da semana — abaixo dos cards */}
           <LeadScoreGraficoSemana semana={semana} carregando={carregando} />
+
+          {/* Vendas da semana (mesmo filtro "WEBN Sem Renov" + régua dos KPIs) */}
+          <TabelaVendasMini vendas={dados?.vendas ?? []} carregando={carregando} titulo="Vendas da Semana" />
         </div>
 
         {/* Funil — 35% */}

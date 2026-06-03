@@ -6,14 +6,19 @@ import { createClient } from '@/lib/supabase/client'
 import { formatMoeda } from '@/lib/format'
 import { aplicarRegras } from '@/lib/filtros-personalizados'
 import type { RegraFiltro } from '@/lib/filtros-personalizados'
+import TabelaVendasMini from './TabelaVendasMini'
+import { montarComprasFiltradas } from '@/lib/agrupar-compras'
+import type { Venda } from '@/app/(autenticado)/vendas/_components/VendasClient'
 
 interface TpwDados {
-  investido:        number
-  impressions:      number
-  linkClicks:       number
-  landingPageViews: number
-  receitaBruta:     number
-  numVendas:        number
+  investido:         number
+  impressions:       number
+  linkClicks:        number
+  landingPageViews:  number
+  checkoutsInitiated: number
+  receitaBruta:      number
+  numVendas:         number
+  vendas:            Venda[]
 }
 
 interface FunilStep {
@@ -139,14 +144,14 @@ export default function TpwClient({ filtroTrafegoId = null, filtroVendasId = nul
 
       let trafegoQ = supabase
         .from('trafego')
-        .select('amount_spent, impressions, link_clicks, landing_page_views')
+        .select('amount_spent, impressions, link_clicks, landing_page_views, checkouts_initiated')
         .gte('date_ref', inicio)
         .lte('date_ref', fim)
       if (regrasTrafego.length) trafegoQ = aplicarRegras(trafegoQ, regrasTrafego)
 
       let vendasQ = supabase
         .from('vendas')
-        .select('status, valor_venda, venda_principal_id')
+        .select('id, data_pedido, data_aprovacao, nome_contato, email_contato, telefone_contato, nome_oferta, produto_id, oferta_id, marketplace, status, pagamento, parcelas, moeda, valor_venda, valor_liquido, utm_source, utm_campaign, utm_medium, utm_content, venda_principal_id')
         .gte('data_pedido', inicio + 'T00:00:00-03:00')
         .lte('data_pedido', fim    + 'T23:59:59.999-03:00')
       if (regrasVendas.length) vendasQ = aplicarRegras(vendasQ, regrasVendas)
@@ -154,14 +159,15 @@ export default function TpwClient({ filtroTrafegoId = null, filtroVendasId = nul
       const [{ data: tRows }, { data: vRows }] = await Promise.all([trafegoQ, vendasQ])
 
       const trafego = (tRows ?? []).reduce(
-        (acc: { investido: number; impressions: number; linkClicks: number; landingPageViews: number },
-          r: { amount_spent: number | null; impressions: number | null; link_clicks: number | null; landing_page_views: number | null }) => ({
-          investido:        acc.investido        + (r.amount_spent       ?? 0),
-          impressions:      acc.impressions      + (r.impressions        ?? 0),
-          linkClicks:       acc.linkClicks       + (r.link_clicks        ?? 0),
-          landingPageViews: acc.landingPageViews + (r.landing_page_views ?? 0),
+        (acc: { investido: number; impressions: number; linkClicks: number; landingPageViews: number; checkoutsInitiated: number },
+          r: { amount_spent: number | null; impressions: number | null; link_clicks: number | null; landing_page_views: number | null; checkouts_initiated: number | null }) => ({
+          investido:         acc.investido         + (r.amount_spent        ?? 0),
+          impressions:       acc.impressions       + (r.impressions         ?? 0),
+          linkClicks:        acc.linkClicks        + (r.link_clicks         ?? 0),
+          landingPageViews:  acc.landingPageViews  + (r.landing_page_views  ?? 0),
+          checkoutsInitiated: acc.checkoutsInitiated + (r.checkouts_initiated ?? 0),
         }),
-        { investido: 0, impressions: 0, linkClicks: 0, landingPageViews: 0 }
+        { investido: 0, impressions: 0, linkClicks: 0, landingPageViews: 0, checkoutsInitiated: 0 }
       )
 
       const aprovadas    = (vRows ?? []).filter((v: { status: string }) => STATUS_APROVADO.includes(v.status))
@@ -169,7 +175,12 @@ export default function TpwClient({ filtroTrafegoId = null, filtroVendasId = nul
       // Conta só a venda mãe (1 por compra); order bumps/upsells (venda_principal_id != null) não contam.
       const numVendas    = aprovadas.filter((v: { venda_principal_id: string | null }) => v.venda_principal_id == null).length
 
-      setDados({ ...trafego, receitaBruta, numVendas })
+      // Tabela: 1 linha por COMPRA. Agrupa as aprovadas por compra; bumps cuja mãe não está no
+      // conjunto (mãe não aprovada/fora do range) são descartados (fetchMaes vazio) — assim o nº de
+      // linhas = nº de mães aprovadas = numVendas (KPI), e o valor de cada linha soma seus bumps.
+      const compras = await montarComprasFiltradas<Venda>(aprovadas as unknown as Venda[], async () => [])
+
+      setDados({ ...trafego, receitaBruta, numVendas, vendas: compras })
     } finally {
       setCarregando(false)
     }
@@ -198,8 +209,9 @@ export default function TpwClient({ filtroTrafegoId = null, filtroVendasId = nul
   const funilSteps: FunilStep[] = [
     { label: 'IMPRESSÕES',      valor: dados?.impressions      ?? 0, formatado: fmtNum(dados?.impressions      ?? 0) },
     { label: 'CLIQUES NO LINK', valor: dados?.linkClicks       ?? 0, formatado: fmtNum(dados?.linkClicks       ?? 0) },
-    { label: 'PAGE VIEW',       valor: dados?.landingPageViews ?? 0, formatado: fmtNum(dados?.landingPageViews ?? 0) },
-    { label: 'TOTAL DE VENDAS', valor: dados?.numVendas        ?? 0, formatado: fmtNum(dados?.numVendas        ?? 0) },
+    { label: 'PAGE VIEW',         valor: dados?.landingPageViews   ?? 0, formatado: fmtNum(dados?.landingPageViews   ?? 0) },
+    { label: 'CHECKOUT INICIADO', valor: dados?.checkoutsInitiated ?? 0, formatado: fmtNum(dados?.checkoutsInitiated ?? 0) },
+    { label: 'TOTAL DE VENDAS',   valor: dados?.numVendas          ?? 0, formatado: fmtNum(dados?.numVendas          ?? 0) },
   ]
 
   return (
@@ -249,11 +261,16 @@ export default function TpwClient({ filtroTrafegoId = null, filtroVendasId = nul
 
       <div className="flex flex-col lg:flex-row lg:items-start gap-5">
 
-        {/* KPI Cards — 65% */}
-        <div className="lg:flex-[65] grid grid-cols-2 sm:grid-cols-3 auto-rows-min gap-4">
-          {kpis.map(({ label, valor }) => (
-            <KpiCard key={label} label={label} valor={valor} carregando={carregando} />
-          ))}
+        {/* Coluna esquerda — 65%: KPIs e, logo abaixo, a tabela de vendas */}
+        <div className="lg:flex-[65] flex flex-col gap-5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 auto-rows-min gap-4">
+            {kpis.map(({ label, valor }) => (
+              <KpiCard key={label} label={label} valor={valor} carregando={carregando} />
+            ))}
+          </div>
+
+          {/* Vendas do período (mesmo filtro de vendas da aba + range De/Até dos KPIs) */}
+          <TabelaVendasMini vendas={dados?.vendas ?? []} carregando={carregando} titulo="Vendas" />
         </div>
 
         {/* Funil — 35% */}

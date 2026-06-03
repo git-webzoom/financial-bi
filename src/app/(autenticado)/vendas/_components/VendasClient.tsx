@@ -7,6 +7,7 @@ import VendaDrawer from './VendaDrawer'
 import { Search, X, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react'
 import { aplicarRegras } from '@/lib/filtros-personalizados'
 import type { FiltroPersonalizado, RegraFiltro } from '@/lib/filtros-personalizados'
+import { montarComprasFiltradas as montarComprasHelper } from '@/lib/agrupar-compras'
 interface SemanaOpcao { numero: number; inicio: string; fim: string; inicio_ts?: string; fim_ts?: string }
 
 const PAGE_SIZE = 20
@@ -415,43 +416,11 @@ export default function VendasClient({
   // faltam (para exibir nome/dados da compra) e soma valor/qtd contando SÓ as linhas filtradas
   // (o valor da mãe que ficou de fora do filtro NÃO entra — opção A confirmada pelo usuário).
   const montarComprasFiltradas = useCallback(async (linhas: Venda[]): Promise<Venda[]> => {
-    if (linhas.length === 0) return []
-
-    // Agrupa as linhas filtradas por id de compra (mãe).
-    const grupos = new Map<string, Venda[]>()
-    for (const l of linhas) {
-      const compraId = l.venda_principal_id ?? l.id
-      const arr = grupos.get(compraId) ?? []
-      arr.push(l)
-      grupos.set(compraId, arr)
-    }
-
-    // Mães já presentes entre as linhas filtradas; as que faltam (mãe não passou o filtro) buscamos.
-    const presentes = new Map(linhas.filter(l => l.venda_principal_id == null).map(l => [l.id, l]))
-    const idsFaltantes = Array.from(grupos.keys()).filter(id => !presentes.has(id))
-    if (idsFaltantes.length > 0) {
-      const { data: maesFaltantes } = await supabase
-        .from('vendas').select('*').in('id', idsFaltantes)
-      for (const m of (maesFaltantes as Venda[]) ?? []) presentes.set(m.id, m)
-    }
-
-    // Monta uma linha por compra: dados da mãe + agregados das linhas FILTRADAS daquela compra.
-    const compras: Venda[] = []
-    for (const [compraId, doGrupo] of Array.from(grupos.entries())) {
-      const mae = presentes.get(compraId)
-      if (!mae) continue   // mãe não encontrada (raro); ignora a compra
-      // bumps filtrados = linhas do grupo que não são a própria mãe
-      const aprovadasFiltradas = doGrupo.filter(l => STATUS_APROVADO.includes(l.status))
-      compras.push({
-        ...mae,
-        qtd_bumps: doGrupo.filter(l => l.id !== compraId).length,
-        valor_total_grupo:         aprovadasFiltradas.reduce((s, l) => s + (l.valor_venda   ?? 0), 0),
-        valor_liquido_total_grupo: aprovadasFiltradas.reduce((s, l) => s + (l.valor_liquido ?? 0), 0),
-      })
-    }
-    // Ordena por data do pedido desc (mesma ordem da tabela)
-    compras.sort((a, b) => (b.data_pedido ?? '').localeCompare(a.data_pedido ?? ''))
-    return compras
+    // Lógica compartilhada em lib/agrupar-compras (mesma usada nas tabelas do dashboard).
+    return montarComprasHelper<Venda>(linhas, async (ids) => {
+      const { data } = await supabase.from('vendas').select('*').in('id', ids)
+      return (data as Venda[]) ?? []
+    })
   }, [supabase])
 
   // Agrega os bumps na lista inicial (SSR) uma única vez, para o badge "+N" e o valor

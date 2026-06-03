@@ -16,6 +16,61 @@
 
 ---
 
+## [2026-06-03] Tabela de vendas nas abas do dashboard — @claude
+- **O quê:** nova **tabela de vendas simplificada** em cada aba do `/dashboard`, listando as vendas que
+  batem com o filtro da aba. Colunas: **nome, email, oferta (badge +N de bumps), valor**; **10/página**;
+  clique na linha abre o `VendaDrawer` (reusado da /vendas). Posições: aba **Webinário** abaixo do
+  gráfico de Lead Score; mockup **venda_direta** (TPW) abaixo dos cards de KPI.
+  - Novo componente `dashboard/_components/TabelaVendasMini.tsx` (tabela no desktop, cards no mobile).
+  - Novo helper `src/lib/agrupar-compras.ts` (`montarComprasFiltradas`) — extraído de
+    `VendasClient` (que agora importa de lá); 1 linha por compra (agrupa order bumps por
+    `coalesce(venda_principal_id, id)`, valor = soma das linhas aprovadas filtradas).
+- **Como os dados batem com o filtro:** a tabela usa a **MESMA busca de vendas que alimenta os KPIs**
+  de cada mockup (mesmo `.select` expandido + mesmo range de data + mesmo `aplicarRegras` + só status
+  aprovado). Daí deriva a lista de compras — impossível divergir do KPI. Webinário usa o filtro fixo
+  "WEBN Sem Renov" + régua de `listar_semanas_vendas`; TPW usa o filtro dinâmico `filtroVendasId` + os
+  inputs De/Até.
+- **Por quê:** ver as vendas da aba sem sair para a página /vendas.
+- **Como testou:** banco real — semana 174 (filtro WEBN): 25 linhas aprovadas → **22 compras distintas**
+  (= "Nº de Vendas") somando **R$ 11.377,18** (= "R$ Vendas"). A tabela mostra essas 22 linhas.
+  `npm run build` OK (26/26 páginas).
+- **Impacto/risco:** **frontend puro** — sem SQL/RPC/backend. Refactor da `montarComprasFiltradas` do
+  `VendasClient` para o helper compartilhado (mesma lógica, sem mudança de comportamento). Expandido o
+  `.select()` de vendas nos 2 mockups (mais colunas para tabela/drawer; filtro/contagem inalterados).
+- **Docs atualizados:** `FRONTEND.md` (tabela nas abas + match com KPI), este CHANGELOG.
+
+## [2026-06-03] Passo "Checkout Iniciado" no funil dos mockups (/dashboard) — @claude
+- **O quê:** novo passo **CHECKOUT INICIADO** no funil, **antes do passo de vendas**, nos 2 mockups
+  com funil: aba **Webinário** (`WebinarioClient.tsx`, entre PITCH e Nº VENDAS → funil de 9 passos) e
+  mockup **venda_direta** (`TpwClient.tsx`, entre PAGE VIEW e TOTAL DE VENDAS → funil de 5 passos).
+  Dado: `trafego.checkouts_initiated` (já existia/populado).
+- **Como (segue o filtro da aba):** incluído `checkouts_initiated` no `.select()` do tráfego e somado
+  no mesmo reduce de impressões/cliques. O `aplicarRegras` (filtro de tráfego: "WEBN" fixo no
+  Webinário; dinâmico via `filtroTrafegoId` no TPW) filtra por LINHA (`campaign_name` etc.), então o
+  checkout herda exatamente o mesmo filtro das demais métricas de tráfego. Acrescentada 1 largura ao
+  `FUNIL_WIDTHS` do Webinário (8→9) p/ o funil seguir decrescente.
+- **Por quê:** dar visibilidade ao Checkout Iniciado (pixel/Meta) na jornada de conversão.
+- **⚠️ Fonte do dado:** CHECKOUT INICIADO vem do **pixel do Facebook** (atribuição do Meta) e segue o
+  filtro de **tráfego**; o **Nº de Vendas** vem das **vendas reais do sistema** (filtro de **vendas**).
+  Fontes diferentes — não batem exatamente, é esperado (documentado em `FRONTEND.md`).
+- **Como testou:** banco real — filtro WEBN numa semana: impressões 193.840 → cliques 2.811 → page
+  views 1.954 → **checkouts 65** (coerente no funil). `npm run build` OK (26/26 páginas).
+- **Impacto/risco:** **frontend puro** — nenhuma mudança de SQL/RPC/Edge Function (coluna já coletada).
+- **Docs atualizados:** `FRONTEND.md` (funis citam Checkout Iniciado + nota pixel×sistema), CHANGELOG.
+
+## [2026-06-03] Card CPL nos KPIs da aba Webinário (/dashboard) — @claude
+- **O quê:** novo KPI **CPL** (Custo Por Lead) na aba Webinário do `/dashboard`
+  (`WebinarioClient.tsx`), entre o CPA e o ROAS. CPL = investido ÷ leads, com guarda contra divisão
+  por zero (R$ 0,00 quando não há leads). Passa de 6 para 7 cards.
+- **Por quê:** o time precisa acompanhar o custo por lead da semana junto dos demais KPIs.
+- **Filtro:** obedece o mesmo filtro da aba que os outros KPIs — reusa o `investido` já filtrado por
+  "WEBN" (o mesmo que o CPA usa) e os `leads` (= "LEADS" do funil, contagem de `webinario_inscritos`
+  da semana). Nenhuma query/filtro novo.
+- **Como testou:** `npm run build` OK. CPL = R$ Tráfego ÷ LEADS do funil; recalcula ao trocar a semana.
+- **Impacto/risco:** **frontend puro**, 1 linha no array de KPIs + 1 atalho de variável. Nada de
+  SQL/RPC/backend. Card já responsivo (KpiCard).
+- **Docs atualizados:** `FRONTEND.md` (aba Webinário agora cita 7 KPIs incl. CPL), este CHANGELOG.
+
 ## [2026-06-03] Revisão de responsividade mobile (cara de app) — @claude
 - **O quê:** revisão de frontend para o sistema funcionar bem no celular. Quatro frentes:
   1. **KPIs não estouram:** os 7 `KpiCard` (dashboard Webinário/TPW, crm, webnario, grupos, trafego,
