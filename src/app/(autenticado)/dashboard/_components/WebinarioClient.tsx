@@ -7,6 +7,7 @@ import { formatMoeda } from '@/lib/format'
 import { aplicarRegras } from '@/lib/filtros-personalizados'
 import type { RegraFiltro } from '@/lib/filtros-personalizados'
 import SeletorSemana from '@/app/(autenticado)/crm/_components/SeletorSemana'
+import LeadScoreGraficoSemana from './LeadScoreGraficoSemana'
 
 interface WebinarioDados {
   investido:        number
@@ -326,11 +327,16 @@ export default function WebinarioClient() {
 
       <div className="flex flex-col lg:flex-row lg:items-start gap-5">
 
-        {/* KPI Cards — 65% */}
-        <div className="lg:flex-[65] grid grid-cols-2 sm:grid-cols-3 auto-rows-min gap-4">
-          {kpis.map(({ label, valor }) => (
-            <KpiCard key={label} label={label} valor={valor} carregando={carregando} />
-          ))}
+        {/* Coluna esquerda — 65%: KPIs e, logo abaixo, o gráfico de Lead Score */}
+        <div className="lg:flex-[65] flex flex-col gap-5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 auto-rows-min gap-4">
+            {kpis.map(({ label, valor }) => (
+              <KpiCard key={label} label={label} valor={valor} carregando={carregando} />
+            ))}
+          </div>
+
+          {/* Distribuição de Lead Score por nota dos captados da semana — abaixo dos cards */}
+          <LeadScoreGraficoSemana semana={semana} carregando={carregando} />
         </div>
 
         {/* Funil — 35% */}

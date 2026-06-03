@@ -16,6 +16,27 @@
 
 ---
 
+## [2026-06-03] Gráfico de Lead Score por nota na aba Webinário (/dashboard) — @claude
+- **O quê:**
+  - Nova RPC **`get_lead_score_distribuicao_semana(p_numero int)`** (migration
+    `20260603160000_get_lead_score_distribuicao_semana.sql`): cruza os captados da semana
+    (`webinario_inscritos.numero_semana`) com `lead_score` por `contato_id` e devolve
+    `{total_captados, preencheram, sem_resposta, faixas:{A+,A,B,C,D}}`.
+  - Novo componente **`LeadScoreGraficoSemana.tsx`** e sua integração (aditiva) na aba **Webinário**
+    do `/dashboard` (`WebinarioClient.tsx`), abaixo dos KPIs/funil. Gráfico de **colunas verticais**
+    por nota (A+→D, cor da faixa), com nº+% em cada coluna, **resumo** "X captados · Y preencheram
+    (Z%) · W sem resposta" e **legenda** com o significado de cada faixa. Usa a semana de captação do
+    seletor da aba; recarrega ao trocar de semana. Estados de carregando/vazio tratados.
+- **Por quê:** dar ao time (público leigo) uma leitura imediata da **qualidade dos leads** captados
+  na semana — quantos preencheram a pesquisa e como se distribuem por nota.
+- **Como testou:** RPC no banco real — semana 176 (64/53/11 · A+6 A7 B3 C8 D29), 175 (681/470/211 ·
+  A+36 A46 B52 C94 D242) e semana inexistente (objeto zerado, sem erro); soma das faixas == preencheram.
+  `npm run build` OK (26/26 páginas; `/dashboard` 6.85→7.42 kB).
+- **Impacto/risco:** **aditivo** — não altera seletor, KPIs nem funil da aba; nenhuma tabela/função/
+  cron existente tocada. Reusa Recharts (já no projeto) e a paleta de cores das faixas (`CrmTabela`).
+  "Sem resposta" fica só no resumo (não vira barra de nota — evita confundir cobertura com qualidade).
+- **Docs atualizados:** `FUNCOES-SQL.md` (RPC), `FRONTEND.md` (gráfico na aba), este CHANGELOG.
+
 ## [2026-06-03] Importação retroativa de Lead Score (planilha CSV) — @claude
 - **O quê:** novo script `scripts/importar-lead-score-retroativo.js` que importa ~10,6 mil leads
   retroativos (de jan a 02/06/2026) de `planilhas/leadscore_retroativo_020626.csv` para `lead_score`,
