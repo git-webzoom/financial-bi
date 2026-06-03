@@ -16,6 +16,27 @@
 
 ---
 
+## [2026-06-03] Revisão de responsividade mobile (cara de app) — @claude
+- **O quê:** revisão de frontend para o sistema funcionar bem no celular. Quatro frentes:
+  1. **KPIs não estouram:** os 7 `KpiCard` (dashboard Webinário/TPW, crm, webnario, grupos, trafego,
+     vendas) ganharam fonte responsiva (`text-lg sm:text-xl lg:text-2xl` etc.), `min-w-0` + `truncate`
+     no valor/label e padding `p-4 sm:p-5`. Números longos (ex.: "R$ 10.632,60") não vazam mais o card.
+  2. **Padding mobile:** `dashboard/page.tsx` e o 2º container de `grupos` passaram de `p-6` fixo para
+     `p-4 md:p-6` (padrão das demais páginas).
+  3. **Tabelas viram cards no mobile:** `crm/CrmTabela.tsx`, `trafego/TrafegoTabela.tsx` e a tabela de
+     `vendas` renderizam a tabela só em `md+` (`hidden md:block`) e, abaixo de `md`, uma lista de cards
+     empilhados (sem scroll horizontal). Removido o efeito do `minWidth: 900` no mobile do /crm.
+  4. **App feel:** `src/app/layout.tsx` agora exporta `viewport` (device-width, viewportFit=cover) +
+     `themeColor #0A0A0A`.
+- **Por quê:** no mobile os números dos KPIs estouravam o card e as tabelas largas forçavam scroll
+  horizontal; o time precisa usar pelo celular como se fosse um app.
+- **Como testou:** `npm run build` OK (26/26 páginas, sem warnings). Mudanças são CSS/markup
+  responsivo (breakpoints md/sm, truncate, min-w-0). Validação visual logado no mobile fica com o
+  usuário (a sessão do Playwright não autentica).
+- **Impacto/risco:** **frontend puro** — nenhuma mudança de dados/SQL/RPC/Edge Function. Desktop
+  preservado (tamanhos/grids mantidos via breakpoints `lg:`). Sem nova dependência.
+- **Docs atualizados:** `FRONTEND.md` (seção "Responsividade mobile"), este CHANGELOG.
+
 ## [2026-06-03] Gráfico de Lead Score por nota na aba Webinário (/dashboard) — @claude
 - **O quê:**
   - Nova RPC **`get_lead_score_distribuicao_semana(p_numero int)`** (migration

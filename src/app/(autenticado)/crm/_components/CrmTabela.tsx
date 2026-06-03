@@ -54,6 +54,16 @@ function BadgeLeadScore({ faixa, pontos }: { faixa: string | null; pontos: numbe
   )
 }
 
+// Campo label/valor usado nos cards do mobile.
+function Campo({ label, valor }: { label: string; valor: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] uppercase tracking-wide" style={{ color: '#555555' }}>{label}</p>
+      <div className="text-xs truncate" style={{ color: '#AAAAAA' }}>{valor}</div>
+    </div>
+  )
+}
+
 export default function CrmTabela({ inscritos, carregando, onSelecionar }: Props) {
   const [pagina, setPagina] = useState(0)
 
@@ -81,8 +91,8 @@ export default function CrmTabela({ inscritos, carregando, onSelecionar }: Props
 
   return (
     <div>
-      {/* Wrapper com scroll horizontal — essencial no mobile */}
-      <div className="overflow-x-auto">
+      {/* DESKTOP (md+): tabela em grid. No mobile esconde e usa os cards abaixo. */}
+      <div className="hidden md:block overflow-x-auto">
         <div style={{ minWidth: 900 }}>
           {/* Cabeçalho */}
           <div
@@ -154,6 +164,53 @@ export default function CrmTabela({ inscritos, carregando, onSelecionar }: Props
             </div>
           ))}
         </div>
+      </div>
+
+      {/* MOBILE (<md): cada inscrito vira um card empilhado — sem scroll horizontal */}
+      <div className="md:hidden flex flex-col">
+        {pagAtual.map((i) => (
+          <div
+            key={i.id}
+            className="px-4 py-3 cursor-pointer active:bg-[#141414]"
+            style={{ borderBottom: '1px solid #1E1E1E' }}
+            onClick={() => onSelecionar(i)}
+          >
+            {/* Topo: nome + badges (score / comprou / temperatura) */}
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate" style={{ color: '#FFFFFF' }}>{i.nome || '—'}</p>
+                <p className="text-xs truncate" style={{ color: '#888888' }}>{i.email}</p>
+              </div>
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                <BadgeLeadScore faixa={i.lead_faixa} pontos={i.lead_pontos} />
+                {i.comprou && (
+                  <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#0F2A1A', color: '#4ADE80' }}>✓ Comprou</span>
+                )}
+              </div>
+            </div>
+
+            {/* Detalhes em duas colunas (label em cima, valor embaixo) */}
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2 mt-3">
+              <Campo label="Cadastro" valor={formatData(i.data_cadastro)} />
+              <Campo label="Temperatura" valor={<BadgeTemperatura temp={i.temperatura} />} />
+              <Campo label="Source" valor={i.utm_source || '—'} />
+              <Campo label="Campaign" valor={i.utm_campaign || '—'} />
+              <Campo
+                label="Outras semanas"
+                valor={
+                  i.outras_semanas.length === 0 ? '—' : (
+                    <span className="flex flex-wrap gap-1">
+                      {i.outras_semanas.slice(0, 6).map(s => (
+                        <span key={s} className="inline-block px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: '#1A1A1A', color: '#888888' }}>{s}</span>
+                      ))}
+                      {i.outras_semanas.length > 6 && <span className="text-xs" style={{ color: '#555555' }}>…</span>}
+                    </span>
+                  )
+                }
+              />
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Paginação */}

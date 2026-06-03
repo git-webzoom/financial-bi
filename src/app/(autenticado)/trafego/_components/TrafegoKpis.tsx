@@ -10,12 +10,12 @@ function fmt(n: number) {
 function KpiCard({ label, valor, sub }: { label: string; valor: string; sub?: string }) {
   return (
     <div
-      className="rounded-xl px-5 py-4"
+      className="rounded-xl px-4 py-3 sm:px-5 sm:py-4 min-w-0"
       style={{ backgroundColor: '#111111', border: '1px solid #222222' }}
     >
-      <p className="text-xs font-medium uppercase tracking-wide mb-1" style={{ color: '#888888' }}>{label}</p>
-      <p className="text-xl font-bold" style={{ color: '#FFFFFF' }}>{valor}</p>
-      {sub && <p className="text-xs mt-0.5" style={{ color: '#555555' }}>{sub}</p>}
+      <p className="text-[11px] sm:text-xs font-medium uppercase tracking-wide mb-1 truncate" style={{ color: '#888888' }}>{label}</p>
+      <p className="text-base sm:text-lg lg:text-xl font-bold truncate" style={{ color: '#FFFFFF' }}>{valor}</p>
+      {sub && <p className="text-xs mt-0.5 truncate" style={{ color: '#555555' }}>{sub}</p>}
     </div>
   )
 }

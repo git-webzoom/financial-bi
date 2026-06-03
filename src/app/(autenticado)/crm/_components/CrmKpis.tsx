@@ -20,7 +20,7 @@ function KpiCard({
 }) {
   return (
     <div
-      className="rounded-xl px-5 py-4 flex flex-col gap-1"
+      className="rounded-xl px-4 py-3 sm:px-5 sm:py-4 flex flex-col gap-1 min-w-0"
       style={{
         backgroundColor: '#111111',
         border: '1px solid #222222',
@@ -31,16 +31,16 @@ function KpiCard({
       onMouseEnter={e => { if (onClick) (e.currentTarget as HTMLElement).style.borderColor = '#C9A84C' }}
       onMouseLeave={e => { if (onClick) (e.currentTarget as HTMLElement).style.borderColor = '#222222' }}
     >
-      <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#555555' }}>
+      <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider truncate" style={{ color: '#555555' }}>
         {label}
         {onClick && <span className="ml-1 normal-case font-normal" style={{ color: '#3A2E10' }}>↗</span>}
       </p>
       {carregando
         ? <div className="h-8 rounded" style={{ backgroundColor: '#1A1A1A', width: '60%' }} />
-        : <p className="text-3xl font-bold" style={{ color: corValor ?? '#FFFFFF' }}>{valor}</p>
+        : <p className="text-xl sm:text-2xl lg:text-3xl font-bold truncate" style={{ color: corValor ?? '#FFFFFF' }}>{valor}</p>
       }
       {sub && !carregando && (
-        <p className="text-xs" style={{ color: '#888888' }}>{sub}</p>
+        <p className="text-xs truncate" style={{ color: '#888888' }}>{sub}</p>
       )}
     </div>
   )

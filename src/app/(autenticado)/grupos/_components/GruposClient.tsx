@@ -18,9 +18,9 @@ interface Props {
 
 function KpiCard({ label, valor, sub }: { label: string; valor: React.ReactNode; sub?: React.ReactNode }) {
   return (
-    <div className="rounded-xl px-5 py-4 flex flex-col gap-1" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
-      <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#555555' }}>{label}</p>
-      <p className="text-3xl font-bold" style={{ color: '#FFFFFF' }}>{valor}</p>
+    <div className="rounded-xl px-4 py-3 sm:px-5 sm:py-4 flex flex-col gap-1 min-w-0" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
+      <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider truncate" style={{ color: '#555555' }}>{label}</p>
+      <p className="text-xl sm:text-2xl lg:text-3xl font-bold truncate" style={{ color: '#FFFFFF' }}>{valor}</p>
       {sub && <p className="text-xs" style={{ color: '#888888' }}>{sub}</p>}
     </div>
   )
@@ -193,7 +193,7 @@ export default function GruposClient({ campanhasIniciais, kpisGrupo, semanaAtual
 
   // ── Lista de campanhas (tela principal) ───────────────────────────────────────
   return (
-    <div className="p-6 space-y-5" style={{ backgroundColor: '#0A0A0A', minHeight: '100vh' }}>
+    <div className="p-4 md:p-6 space-y-5" style={{ backgroundColor: '#0A0A0A', minHeight: '100vh' }}>
 
       {/* Título */}
       <div>

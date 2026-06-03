@@ -248,14 +248,24 @@ function ProdutoCombobox({
 
 // ─── KPI card ────────────────────────────────────────────────────────────────
 
+// Campo label/valor dos cards de venda no mobile.
+function CampoVenda({ label, valor }: { label: string; valor: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] uppercase tracking-wide" style={{ color: '#555555' }}>{label}</p>
+      <div className="text-xs truncate" style={{ color: '#AAAAAA' }}>{valor}</div>
+    </div>
+  )
+}
+
 function KpiCard({ label, valor }: { label: string; valor: string }) {
   return (
     <div
-      className="rounded-xl px-5 py-4"
+      className="rounded-xl px-4 py-3 sm:px-5 sm:py-4 min-w-0"
       style={{ backgroundColor: '#111111', border: '1px solid #222222' }}
     >
-      <p className="text-xs font-medium uppercase tracking-wide mb-1" style={{ color: '#888888' }}>{label}</p>
-      <p className="text-xl font-bold" style={{ color: '#FFFFFF' }}>{valor}</p>
+      <p className="text-[11px] sm:text-xs font-medium uppercase tracking-wide mb-1 truncate" style={{ color: '#888888' }}>{label}</p>
+      <p className="text-base sm:text-lg lg:text-xl font-bold truncate" style={{ color: '#FFFFFF' }}>{valor}</p>
     </div>
   )
 }
@@ -842,7 +852,8 @@ export default function VendasClient({
         className="rounded-xl overflow-hidden"
         style={{ backgroundColor: '#111111', border: '1px solid #222222' }}
       >
-        <div className="overflow-x-auto">
+        {/* DESKTOP (md+): tabela. No mobile usa os cards abaixo. */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid #1E1E1E', backgroundColor: '#111111' }}>
@@ -912,6 +923,51 @@ export default function VendasClient({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* MOBILE (<md): cada venda vira um card — sem scroll horizontal */}
+        <div className={`md:hidden flex flex-col ${isPending ? 'opacity-50' : ''}`}>
+          {vendas.length === 0 ? (
+            <div className="text-center py-12 text-sm" style={{ color: '#555555' }}>
+              Nenhuma venda encontrada para os filtros selecionados.
+            </div>
+          ) : vendas.map((v) => (
+            <div
+              key={v.id}
+              onClick={() => setVendaSelecionada(v)}
+              className="px-4 py-3 cursor-pointer active:bg-[#111111]"
+              style={{ borderBottom: '1px solid #1E1E1E' }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate" style={{ color: '#FFFFFF' }}>{v.nome_contato ?? '—'}</p>
+                  <p className="text-xs truncate" style={{ color: '#555555' }}>{v.email_contato ?? ''}</p>
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="text-sm font-medium whitespace-nowrap" style={{ color: '#C9A84C' }}>
+                    {formatMoeda(v.valor_total_grupo ?? v.valor_venda, v.moeda)}
+                  </span>
+                  <StatusBadge status={v.status} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2 mt-3">
+                <CampoVenda label="Data" valor={formatData(v.data_pedido)} />
+                <CampoVenda label="Pagamento" valor={<span className="capitalize">{v.pagamento?.replace('_', ' ') ?? '—'}</span>} />
+                <CampoVenda label="Produto" valor={produtos.find((p) => p.id === v.produto_id)?.nome ?? v.produto_id ?? '—'} />
+                <CampoVenda
+                  label="Oferta"
+                  valor={
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <span className="truncate">{v.nome_oferta ?? '—'}</span>
+                      {(v.qtd_bumps ?? 0) > 0 && (
+                        <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-semibold" style={{ backgroundColor: '#2A1E08', color: '#C9A84C', border: '1px solid #C9A84C44' }}>+{v.qtd_bumps}</span>
+                      )}
+                    </span>
+                  }
+                />
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* Paginação */}

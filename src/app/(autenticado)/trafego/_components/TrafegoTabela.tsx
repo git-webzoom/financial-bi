@@ -24,6 +24,16 @@ function cpl(investido: number | null, leads: number | null) {
   return formatMoeda(investido / leads)
 }
 
+// Campo label/valor dos cards no mobile.
+function CampoTraf({ label, valor }: { label: string; valor: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] uppercase tracking-wide" style={{ color: '#555555' }}>{label}</p>
+      <p className="text-xs truncate" style={{ color: '#AAAAAA' }}>{valor}</p>
+    </div>
+  )
+}
+
 interface Props {
   registros:    RegistroTrafego[]
   metaAccounts: MetaAccount[]
@@ -46,7 +56,8 @@ export default function TrafegoTabela({
       className="rounded-xl overflow-hidden"
       style={{ backgroundColor: '#111111', border: '1px solid #222222' }}
     >
-      <div className="overflow-x-auto">
+      {/* DESKTOP (md+): tabela. No mobile usa os cards abaixo. */}
+      <div className="hidden md:block overflow-x-auto">
         <table className={`w-full text-sm transition-opacity ${carregando ? 'opacity-50' : ''}`}>
           <thead>
             <tr style={{ borderBottom: '1px solid #1E1E1E', backgroundColor: '#111111' }}>
@@ -93,6 +104,30 @@ export default function TrafegoTabela({
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* MOBILE (<md): cada registro vira um card — sem scroll horizontal */}
+      <div className={`md:hidden flex flex-col transition-opacity ${carregando ? 'opacity-50' : ''}`}>
+        {registros.length === 0 ? (
+          <div className="px-4 py-10 text-center text-sm" style={{ color: '#555555' }}>Nenhum registro encontrado.</div>
+        ) : registros.map(r => (
+          <div key={r.id} className="px-4 py-3" style={{ borderBottom: '1px solid #1E1E1E' }}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate" style={{ color: '#FFFFFF' }} title={r.campaign_name}>{r.campaign_name || '—'}</p>
+                <p className="text-xs truncate" style={{ color: '#888888' }}>{accountMap.get(r.ad_account_id) ?? r.ad_account_id} · {fmtData(r.date_ref)}</p>
+              </div>
+              <span className="text-sm font-medium shrink-0" style={{ color: '#C9A84C' }}>{formatMoeda(r.amount_spent)}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-x-3 gap-y-2 mt-3">
+              <CampoTraf label="Impressões" valor={fmtNum(r.impressions)} />
+              <CampoTraf label="Cliques" valor={fmtNum(r.link_clicks)} />
+              <CampoTraf label="CTR" valor={ctr(r.link_clicks, r.impressions)} />
+              <CampoTraf label="Leads" valor={fmtNum(r.leads)} />
+              <CampoTraf label="CPL" valor={cpl(r.amount_spent, r.leads)} />
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Paginação */}

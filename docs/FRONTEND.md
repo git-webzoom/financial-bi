@@ -5,6 +5,21 @@
 > passa para o **Client Component** (`_components/*Client.tsx`) que faz filtros/paginação.
 > Ao adicionar/alterar página ou componente compartilhado: atualize aqui **e** registre no `CHANGELOG.md`.
 
+## Responsividade mobile (padrões)
+> Revisado em 2026-06-03 para o sistema parecer um app no celular. Padrões a seguir em telas novas:
+- **Containers de página:** `p-4 md:p-6` (não usar `p-6` fixo).
+- **KPIs:** fonte responsiva e à prova de transbordo — valor `text-lg sm:text-xl lg:text-2xl` (ou
+  `text-base sm:text-lg lg:text-xl` nos cards menores), card com `min-w-0` + `truncate` no valor e no
+  label, padding `p-4 sm:p-5`. Há **7 KpiCard** (um por página/mockup, não compartilhados) — manter o
+  mesmo padrão em todos. Grids mobile-first (`grid-cols-2 sm:grid-cols-3 lg:grid-cols-…`).
+- **Tabelas largas:** no mobile **viram cards empilhados** e no desktop seguem tabela. Padrão: o bloco
+  da tabela é `hidden md:block` e logo abaixo um bloco `md:hidden` renderiza cada linha como card
+  (nome/destaque no topo + campos `label: valor` num grid de 2-3 colunas). Aplicado em
+  `crm/CrmTabela.tsx`, `trafego/TrafegoTabela.tsx`, `vendas/VendasClient.tsx`. O painel/drawer de
+  detalhe ao tocar na linha continua igual.
+- **App feel:** `src/app/layout.tsx` define `viewport` (device-width, viewportFit=cover) +
+  `themeColor #0A0A0A` (barra de status escura).
+
 ## Estrutura
 ```
 src/

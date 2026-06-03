@@ -38,11 +38,11 @@ function seteDiasAtras(): string {
 
 function KpiCard({ label, valor, carregando }: { label: string; valor: string; carregando: boolean }) {
   return (
-    <div className="rounded-xl p-5" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
-      <p className="text-xs font-medium uppercase tracking-wide mb-3" style={{ color: '#888888' }}>{label}</p>
+    <div className="rounded-xl p-4 sm:p-5 min-w-0" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
+      <p className="text-[11px] sm:text-xs font-medium uppercase tracking-wide mb-2 sm:mb-3 truncate" style={{ color: '#888888' }}>{label}</p>
       {carregando
         ? <div className="h-8 w-24 rounded animate-pulse" style={{ backgroundColor: '#1A1A1A' }} />
-        : <p className="text-2xl font-bold" style={{ color: '#FFFFFF' }}>{valor}</p>
+        : <p className="text-lg sm:text-xl lg:text-2xl font-bold truncate" style={{ color: '#FFFFFF' }}>{valor}</p>
       }
     </div>
   )

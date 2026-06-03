@@ -58,7 +58,7 @@ export default function DashboardPage() {
   const abaAtiva = abas.find(a => a.id === abaAtivaId) ?? null
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-5 md:space-y-6">
 
       {/* Abas */}
       <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
