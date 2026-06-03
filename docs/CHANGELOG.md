@@ -16,6 +16,33 @@
 
 ---
 
+## [2026-06-03] Importação retroativa de Lead Score (planilha CSV) — @claude
+- **O quê:** novo script `scripts/importar-lead-score-retroativo.js` que importa ~10,6 mil leads
+  retroativos (de jan a 02/06/2026) de `planilhas/leadscore_retroativo_020626.csv` para `lead_score`,
+  **preservando a data real** de cada lead (coluna `data`). Como o Lead Score só foi ligado em
+  02/06, a base só tinha os leads do webhook; este import preenche todo o histórico anterior.
+- **Como funciona / decisões:**
+  - **Data real:** grava `created_at`/`updated_at` com a data do CSV (DD/MM/AAAA [HH:MM], interpretada
+    como **BRT→UTC**; só-data → 00:00 BRT). INSERT direto (NÃO via edge function/upsert, que gravariam
+    hoje); o trigger é BEFORE UPDATE, então o `created_at` explícito é preservado.
+  - **Mapeamento de colunas** CSV → variáveis da scorecard (9 batem exato; `valor_investido` do form
+    ANTIGO foi mapeado por aproximação de valor — ver `PENDENCIAS.md` e `SCRIPTS.md`).
+  - **Pontuação** pela RPC `calcular_lead_score` (fonte única; cacheada por combinação distinta).
+  - **Dedup** por email (mantém o mais recente; só 5 emails repetidos). **Não sobrescreve** quem já
+    tem score (upsert `ignoreDuplicates` em `contato_id`) — os leads reais do webhook ficam intactos.
+  - Cria contato por email quando novo (com `data_primeira_captura`/`created_at` = data real); reusa
+    se o email já é contato.
+- **Por quê:** ter o histórico de Lead Score visível no `/crm` desde o início da captação, não só de ontem.
+- **Como testou:** `--dry-run` (10.591 distintos, 0 sem email/data, 9 já com score, distribuição de
+  faixa coerente) → lote piloto `--limit 50` (created_at em jan/2026 = data real; 92/A e 76/B batendo
+  com o cálculo manual; integridade 0 divergências) → import completo. Verificação final no banco:
+  `SUM(breakdown)==pontos_total` e `faixa==regra` sem divergências; `MIN(created_at)` em jan/2026.
+- **Impacto/risco:** **aditivo** — só INSERT em `lead_score`/`contatos`. Nenhuma tabela/função/cron/
+  edge function existente alterada. Roda manualmente com a service key (ignora RLS — `docs/SCRIPTS.md`).
+  Reexecutável/idempotente (quem já tem score é pulado). A planilha NÃO é commitada (dado de leads).
+- **Docs atualizados:** `SCRIPTS.md` (novo script), `PENDENCIAS.md` (mapeamento valor antigo→atual),
+  este CHANGELOG.
+
 ## [2026-06-03] Re-score em lote do Lead Score (RPC + botão no /crm) — @claude
 - **O quê:**
   - Nova função SQL **`reprocessar_lead_scores()`** (migration

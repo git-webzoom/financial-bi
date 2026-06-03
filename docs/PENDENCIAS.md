@@ -66,7 +66,13 @@
    - **Decisão registrada (`valor` = `R$ 150.000 a R$ 500.000` → -5):** essa faixa não tinha pontuação no
      modelo original (coeficiente da regressão fortemente negativo, ~-1.23); foi definida em **-5** (mesma
      banda de "Acima de R$ 500.000"). As faixas "Até R$ 50 mil"/"Entre R$500K e R$1M"/"Mais que R$5M" do
-     modelo **não existem no formulário** — ignoradas. Ver `PLANO-LEAD-SCORE.md` §5.
+     modelo **não existem no formulário ATUAL** — ignoradas na scorecard. Ver `PLANO-LEAD-SCORE.md` §5.
+     - ⚠️ **Mas existem no formulário ANTIGO** (dados retroativos importados em 2026-06-03, ver
+       `SCRIPTS.md` → `importar-lead-score-retroativo.js`). O script mapeou as faixas antigas para as
+       atuais por aproximação de valor (só no import, **não** na scorecard): `Até R$ 50 mil`→`R$ 20.000 a
+       R$ 50.000` (16); `Entre R$ 50 mil e R$ 150 mil`→`R$ 50.000 a R$ 150.000` (12); `Entre R$ 150 mil e
+       R$ 500 mil`→`R$ 150.000 a R$ 500.000` (-5); `Entre R$ 500 mil e R$ 1 mi`/`Entre R$ 1 e R$ 5 mi`/
+       `Mais que R$ 5 mi`→`Acima de R$ 500.000` (-5). Se reimportar dados antigos, reusar esse mapeamento.
    - **30,8% dos leads não respondem a pesquisa** → score cai num default perto da média (campos ausentes
      = 0 ponto). Quanto mais completo o form, mais preciso o score.
    - **Defasagem de exibição no /crm (esperado, não é bug):** o score é gravado **na hora** do envio do
