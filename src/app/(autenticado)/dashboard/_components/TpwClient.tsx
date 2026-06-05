@@ -7,6 +7,7 @@ import { formatMoeda } from '@/lib/format'
 import { aplicarRegras } from '@/lib/filtros-personalizados'
 import type { RegraFiltro } from '@/lib/filtros-personalizados'
 import TabelaVendasMini from './TabelaVendasMini'
+import TabelaAdsPerformance from './TabelaAdsPerformance'
 import { montarComprasFiltradas } from '@/lib/agrupar-compras'
 import type { Venda } from '@/app/(autenticado)/vendas/_components/VendasClient'
 
@@ -123,9 +124,13 @@ export default function TpwClient({ filtroTrafegoId = null, filtroVendasId = nul
   const [dataFim,    setDataFim]    = useState(hoje())
   const [dados,      setDados]      = useState<TpwDados | null>(null)
   const [carregando, setCarregando] = useState(true)
+  // Range JÁ CONFIRMADO (só muda no mount e ao clicar "Buscar") — a tabela de anúncios usa este,
+  // não os inputs ao vivo, para não refazer a query a cada tecla e bater com o range dos KPIs.
+  const [rangeAplicado, setRangeAplicado] = useState({ inicio: seteDiasAtras(), fim: hoje() })
 
   const buscarDados = useCallback(async (inicio: string, fim: string) => {
     setCarregando(true)
+    setRangeAplicado({ inicio, fim })
     try {
       // Regras dos filtros vinculados à aba (recebidos por props). Sem filtro → soma tudo no range.
       const [{ data: tRegrasRaw }, { data: vRegrasRaw }] = await Promise.all([
@@ -192,17 +197,19 @@ export default function TpwClient({ filtroTrafegoId = null, filtroVendasId = nul
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buscarDados])
 
-  const inv = dados?.investido    ?? 0
-  const rec = dados?.receitaBruta ?? 0
-  const num = dados?.numVendas    ?? 0
+  const inv  = dados?.investido    ?? 0
+  const rec  = dados?.receitaBruta ?? 0
+  const num  = dados?.numVendas    ?? 0
+  const impr = dados?.impressions  ?? 0
   const fmtNum = (n: number) => n.toLocaleString('pt-BR')
 
   const kpis = [
     { label: 'R$ Tráfego',   valor: formatMoeda(inv)                            },
     { label: 'R$ Vendas',    valor: formatMoeda(rec)                            },
     { label: 'Nº de Vendas', valor: fmtNum(num)                                 },
-    { label: 'Ticket Médio', valor: formatMoeda(num > 0 ? rec / num : 0)        },
+    { label: 'CPM',          valor: formatMoeda(impr > 0 ? inv / impr * 1000 : 0) },
     { label: 'CPA',          valor: formatMoeda(num > 0 ? inv / num : 0)        },
+    { label: 'Ticket Médio', valor: formatMoeda(num > 0 ? rec / num : 0)        },
     { label: 'ROAS',         valor: (inv > 0 ? rec / inv : 0).toFixed(2) + 'x' },
   ]
 
@@ -279,6 +286,10 @@ export default function TpwClient({ filtroTrafegoId = null, filtroVendasId = nul
         </div>
 
       </div>
+
+      {/* Performance por anúncio (mídia) — mesmo filtro de tráfego da aba + range confirmado.
+          Venda/CPA/ROAS NÃO aparecem por anúncio (vendas não carregam o anúncio); ficam nos KPIs acima. */}
+      <TabelaAdsPerformance filtroTrafegoId={filtroTrafegoId} inicio={rangeAplicado.inicio} fim={rangeAplicado.fim} />
     </div>
   )
 }

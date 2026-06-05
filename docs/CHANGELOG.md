@@ -16,6 +16,72 @@
 
 ---
 
+## [2026-06-05] Performance por anúncio nas abas TPW/Desafio (frontend) — @claude
+- **O quê:** novo componente `dashboard/_components/TabelaAdsPerformance.tsx` renderizado no mockup
+  **venda_direta** (`TpwClient`), abaixo dos KPIs/funil/tabela de vendas. Mostra **análise de mídia por
+  anúncio** para os chefes (sem acesso ao gerenciador): tabela (desktop) / cards (mobile) com Tipo
+  (🎬 Vídeo / 🖼️ Imagem), Gasto, CPM, **Hook**, **Hold**, **Click** (mini-barras coloridas verde/amarelo/
+  vermelho), Checkouts; ordenável por Gasto/Hook/CPM; + 2 gráficos Recharts (ranking por gasto; scatter
+  Hook×Gasto dos vídeos). Também **+1 KPI no TpwClient: CPM** (agora 7 KPIs).
+- **Dados:** RPC `get_trafego_ads_aba` (Fase 2) com as regras do **filtro de tráfego da aba** + o range
+  confirmado dos KPIs (novo estado `rangeAplicado` — só muda no "Buscar", não a cada tecla no input).
+- **Decisões de produto:** **venda/CPA/ROAS NÃO entram por anúncio** (vendas não carregam o anúncio;
+  `utm_content` vazio em ~99%) — ficam nos KPIs da aba. **Nº de Vendas = compras** (1 por pedido, igual ao
+  resto do BI). **Tipo img/vídeo** vem do dado real (tem video views?), não do nome do anúncio.
+- **Como testou:** `npm run build` OK (26/26, `/dashboard` 7.8→16 kB c/ Recharts); `npm run lint` sem
+  warnings nos arquivos novos. **Navegador** (página de QA efêmera com dados reais da RPC TPW, depois
+  removida): validado desktop + **mobile (cards)** + ordenação por Hook (vídeos sobem, imagens com "—"
+  descem) + casos extremos (Click 130% capa a barra mas mostra o nº; imagem com Hook/Hold "—" e CTR).
+- **Impacto/risco:** **frontend puro** + leitura via RPC já existente. `TpwClient` ganhou import,
+  1 KPI (CPM) e 1 estado (`rangeAplicado`); ordem dos KPIs reordenada (CPM antes de CPA). Nenhuma
+  mudança de contrato de dados. Artefatos de teste (página `qa-tmp`, exceção temporária no middleware,
+  prop `dadosIniciais`) **revertidos** — `git status` limpo.
+- **Docs atualizados:** `FRONTEND.md` (mockup venda_direta: 7 KPIs + bloco Performance por Anúncio),
+  este CHANGELOG.
+
+## [2026-06-05] RPC `get_trafego_ads_aba` — performance por anúncio das abas — @claude
+- **O quê:** nova função `get_trafego_ads_aba(p_inicio date, p_fim date, p_regras jsonb)` que agrega o
+  `trafego` **por anúncio** (`ad_name`) e devolve tudo calculado: `tipo` (img/vídeo), `gasto`, `cpm`,
+  `hook_rate`, `hold_rate`, `click_rate`, `impressoes`, `link_clicks`, `checkouts_initiated`. Usada
+  pelas abas `venda_direta` (TPW/Desafio) na Fase 3.
+- **Filtro genérico:** `p_regras` é o JSONB das regras do filtro de **tráfego** da aba (mesmo shape de
+  `filtros_personalizados_regras`); a RPC monta o WHERE espelhando `lib/filtros-personalizados.ts`
+  (`aplicarRegras`). Assim qualquer aba futura funciona sem código novo. **Segurança:** `campo` validado
+  contra whitelist (`campaign_name/adset_name/ad_name/ad_account_id`), valores via `format %L`
+  (sem SQL injection — testado com `"DROP TABLE"` → regra ignorada).
+- **Tipo img/vídeo:** prioriza o **dado real** (tem `video_views_3s`/`video_watches_75`?) sobre a
+  heurística do nome — então um anúncio nomeado `-img-` que rodou como vídeo aparece como `video`
+  (correto: o nome nem sempre reflete o formato real).
+- **Por quê:** agregar no banco (não puxar 6.638 linhas pro browser) e centralizar as fórmulas de mídia.
+- **Como testou:** banco real — TPW e Desafio batem com a validação manual da Fase 1 (Desafio vídeo:
+  46 ads, R$9.790, Hook 15,9%; imagem 26 ads, R$3.322). Robustez: `[]` retorna todos (105),
+  campo inválido ignorado (105), filtro por `ad_name` (56). `SECURITY DEFINER` + `GRANT authenticated`.
+- **Impacto/risco:** **baixo** — função nova, aditiva, somente leitura. Migration versionada
+  `20260605130000_get_trafego_ads_aba.sql` (banco + arquivo local em sincronia).
+- **Docs atualizados:** `FUNCOES-SQL.md` (nova RPC), este CHANGELOG.
+
+## [2026-06-05] Fix coleta de vídeo: `video_views_3s` no tráfego (Hook/Hold Rate) — @claude
+- **O quê:** nova coluna **`trafego.video_views_3s`** (bigint) + correção da função **`process_trafego`**.
+  O Meta entrega o "Video View" (3s) dentro de `payload->'actions'` como `action_type='video_view'`, mas
+  a função tentava ler `video_thruplay_watched` (action **inexistente**) → a coluna `thruplays` ficava
+  **0 em 100% das linhas** e as métricas de vídeo eram incalculáveis. Agora a função extrai o 3s de
+  `actions[].video_view`, grava em `video_views_3s` e replica em `thruplays` (legado).
+- **Reprocesso retroativo:** UPDATE direto recalculou `video_views_3s` nas linhas já materializadas em
+  `trafego` lendo o payload do `raw_trafego` por `raw_id` (mesma fórmula da função nova). **3.237 linhas
+  de vídeo** preenchidas (imagem fica NULL, correto).
+- **Por quê:** habilitar **Hook Rate** (`video_views_3s ÷ impressions`) e **Hold Rate**
+  (`video_watches_75 ÷ video_views_3s`) nas abas TPW/Desafio (Fase 1 do projeto de performance de anúncios).
+- **Como testou:** banco real — 3.237 linhas preenchidas, **0 inconsistências** (`vv3 > impressões` = 0,
+  `v75 > vv3` = 0); Hook global 9,28% / Hold global 9,10%. Por aba: TPW vídeo Hook 23,4%/Hold 13,6%,
+  Desafio vídeo Hook 15,9%/Hold 14,6% (imagem = N/A). `npm run build` OK (26/26). Pipeline de tráfego
+  sem pendências/erros nas últimas 48h (função nova já processando normal).
+- **Impacto/risco:** **baixo.** `thruplays`/`video_watches_*` **não são lidos por nenhum componente**
+  do frontend (grep confirmou); `/trafego` não usa a coluna. Coluna nova é aditiva. Migrations
+  versionadas: `20260605120000_trafego_add_video_views_3s.sql`,
+  `20260605120001_fix_process_trafego_video_views_3s.sql` (aplicadas no banco + arquivo local em sincronia).
+- **Docs atualizados:** `TABELAS.md` (coluna nova, 28→29 col), `FUNCOES-SQL.md` (`process_trafego`),
+  este CHANGELOG.
+
 ## [2026-06-03] Tabela de vendas nas abas do dashboard — @claude
 - **O quê:** nova **tabela de vendas simplificada** em cada aba do `/dashboard`, listando as vendas que
   batem com o filtro da aba. Colunas: **nome, email, oferta (badge +N de bumps), valor**; **10/página**;

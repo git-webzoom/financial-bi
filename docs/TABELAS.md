@@ -12,7 +12,7 @@
 | `vendas` | 39 | 4.329 | Transações (approved/refunded/chargeback/...). Vem de `raw_vendas` via `process_venda`. FKs soft p/ produto/oferta/contato. **`venda_principal_id`** (uuid, índice): agrupa order bumps/upsells na venda mãe — NULL = mãe ou avulsa; preenchido por `process_venda` via `payload.last_transaction.id`. Ver INTEGRACOES (Manager Guru). |
 | `produtos` | 7 | 209 | Catálogo (Manager Guru). `marketplace_id` único. |
 | `ofertas` | 17 | 2.833 | Ofertas/preços por produto. `mg_offer_id` único. |
-| `trafego` | 28 | 5.974 | Insights Meta Ads por ad/adset/campanha/dia. Vem de `raw_trafego`. |
+| `trafego` | 29 | 6.638 | Insights Meta Ads por ad/adset/campanha/dia. Vem de `raw_trafego`. **`video_views_3s`** (bigint): "Video View" de 3s do Meta, extraído de `payload->actions[video_view]` — base do **Hook Rate** (÷ `impressions`) e do **Hold Rate** (`video_watches_75` ÷ este). A coluna legada `thruplays` lia `video_thruplay_watched` (action inexistente) e ficava 0; agora recebe o mesmo valor do 3s. |
 | `trafego_reach` | 6 | 113 | **Reach deduplicado em nível de conta** (igual ao BM). Usado no KPI "Alcance" quando NÃO há filtro de campanha/adset. Único por `(ad_account_id, date_ref)`. |
 | `crm` | 33 | 4.051 | Engajamento ActiveCampaign (tags, temperatura, e-mails, UTMs). `ac_contact_id` único. |
 | `crm_historico_utm` | 10 | 309 | Histórico de mudanças de UTM no CRM (preenchido pelo trigger `trg_crm_historico_utm`). |

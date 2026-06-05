@@ -7,7 +7,7 @@
 | Função | Args | Retorno | O que faz |
 |--------|------|---------|-----------|
 | `process_venda` | `raw_id uuid` | void | Lê `raw_vendas`, faz `upsert_contato`, insere/atualiza em `vendas`, marca processado. Preenche `venda_principal_id` (order bump/upsell → mãe via `payload.last_transaction.id`). |
-| `process_trafego` | `p_raw_id uuid` | void | Processa uma linha de `raw_trafego` para `trafego`. |
+| `process_trafego` | `p_raw_id uuid` | void | Processa uma linha de `raw_trafego` para `trafego`. Desde 2026-06-05 popula **`video_views_3s`** a partir de `payload->actions[video_view]` (o "Video View / 3s" do Meta) e replica o valor em `thruplays` (legado, antes sempre 0). Hook/Hold Rate dependem disso. |
 | `process_raw_trafego_batch` | — | jsonb | Processa lote pendente de `raw_trafego`. **Roda em cron a cada 1 min.** |
 | `upsert_contato` | email + 10 campos opcionais | uuid | Email único; só preenche campos NULL (não sobrescreve dados existentes). |
 
@@ -49,6 +49,7 @@
 |--------|------|---------|-----------|
 | `get_kpis_vendas` | inicio, fim, produto?, marketplace? | json | KPIs agregados de vendas. **`totalVendas` conta só a venda mãe** (`venda_principal_id IS NULL`); faturamento soma mãe + order bumps aprovados do grupo (status por linha). |
 | `is_venda_aprovada` | `p_status text` | boolean | Regra única de "venda aprovada". |
+| `get_trafego_ads_aba` | `p_inicio date, p_fim date, p_regras jsonb='[]'` | TABLE | **Performance por anúncio** das abas `venda_direta` (TPW/Desafio/futuras). Agrega `trafego` por `ad_name` no período e calcula: `tipo` (video se `video_views_3s>0` ou `video_watches_75>0`, senão imagem — **prioriza o dado real sobre o nome do anúncio**), `gasto`, `impressoes`, `cpm`, `hook_rate` (=`video_views_3s/impressions`, NULL p/ imagem), `hold_rate` (=`video_watches_75/video_views_3s`, NULL p/ imagem), `click_rate` (vídeo: `link_clicks/video_watches_75`; imagem: CTR `link_clicks/impressions`), + cru `link_clicks/checkouts_initiated/video_views_3s/video_watches_75`. `p_regras` = mesmas regras de `filtros_personalizados_regras` do filtro de **tráfego** da aba (JSONB `[{campo,operador,valor,ordem}]`), aplicadas genericamente espelhando `aplicarRegras`. **Segurança:** campo validado contra whitelist (`campaign_name/adset_name/ad_name/ad_account_id`); valores via `format %L` (sem injection). `HAVING` descarta anúncios sem gasto e sem impressão. `SECURITY DEFINER`, `EXECUTE` p/ `authenticated`. **Lado VENDA (R$/nº/CPA/ROAS) NÃO entra aqui** — fica agregado na aba (vendas não carregam o anúncio; `utm_content` vazio em ~99%). |
 
 ## Disparo de jobs / Meta Ads
 | Função | Args | Retorno | O que faz |
