@@ -44,14 +44,34 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'failed to get active webinar week' }, 500)
   }
 
+  // Blindagem: garante que a régua da semana exista ANTES do upsert, evitando o erro 500/FK
+  // que perdia os primeiros acessos quando a semana nova ainda não tinha sido criada.
+  // ensure_semana_existe é idempotente (ON CONFLICT DO NOTHING); falha aqui não é fatal,
+  // o upsert (com retry abaixo) ainda cobre o caso.
+  const { error: ensureErr } = await supabase.rpc('ensure_semana_existe', { p_numero: numeroSemana })
+  if (ensureErr) console.error('ensure_semana_existe error:', ensureErr)
+
   // Upsert de presença
-  const { error: upsertErr } = await supabase.rpc('upsert_presenca_webn', {
+  let { error: upsertErr } = await supabase.rpc('upsert_presenca_webn', {
     p_email:          email,
     p_nome:           nome,
     p_telefone:       telefone,
     p_tag:            tag,
     p_numero_semana:  numeroSemana,
   })
+
+  // Rede de segurança: se ainda violar o FK (23503), cria a semana e tenta uma vez mais.
+  if (upsertErr && (upsertErr as { code?: string }).code === '23503') {
+    console.error('upsert violou FK (23503); criando semana e tentando novamente:', numeroSemana)
+    await supabase.rpc('ensure_semana_existe', { p_numero: numeroSemana })
+    ;({ error: upsertErr } = await supabase.rpc('upsert_presenca_webn', {
+      p_email:          email,
+      p_nome:           nome,
+      p_telefone:       telefone,
+      p_tag:            tag,
+      p_numero_semana:  numeroSemana,
+    }))
+  }
 
   if (upsertErr) {
     console.error('upsert_presenca_webn error:', upsertErr)

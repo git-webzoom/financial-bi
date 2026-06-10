@@ -13,7 +13,7 @@
 | `job-sendflow-grupos` | ❌ | Pull | **cron de hora em hora** + `/api/sendflow/sync-grupos` | Sincroniza grupos WhatsApp da campanha `Cap-{semana_atual}` → `sendflow_grupos`. |
 | `job-sendflow-metricas` | ✅ | Pull | **cron 15 min (daily) + 03:00 (lookback)** + `/api/sendflow/sync-metricas` | Métricas diárias dos grupos → `sendflow_metricas`; recalcula KPIs da semana. |
 | `webhook-manager-guru` | ❌ | Webhook (in) | Manager Guru (POST) | Recebe venda → grava `raw_vendas` → dispara `process_venda`. Idempotente via `idempotency_key`. |
-| `webhook-hotwebnar` | ❌ | Webhook (in) | Hotwebnar (POST) | Recebe presença ao vivo → `upsert_presenca_webn` → `webinario_presencas`. |
+| `webhook-hotwebnar` | ❌ | Webhook (in) | Hotwebnar (POST) | Recebe presença ao vivo → `get_semana_webnario_ativa` → **`ensure_semana_existe` (blindagem, idempotente)** → `upsert_presenca_webn` → `webinario_presencas`. Se o upsert violar FK (`23503`), cria a semana e retenta 1x (2026-06-10: nunca mais 500 por semana inexistente). |
 | `webhook-sendflow-grupos` | ❌ | Webhook (in) | Sendflow (POST) | Recebe eventos de entrada/saída de grupo → `sendflow_eventos_grupo`. |
 | `webhook-lead-score` | ❌ | Webhook (in) | **Formulário WEBN (browser do lead, POST)** | Recebe respostas da pesquisa → grava `raw_lead_score` → normaliza nomes do form → `upsert_contato` → `calcular_lead_score` → upsert em `lead_score`. **Tem CORS/OPTIONS** (chamada do navegador). Sem token (valida só `email`). |
 

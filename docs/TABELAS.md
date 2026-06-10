@@ -17,7 +17,7 @@
 | `crm` | 33 | 4.051 | Engajamento ActiveCampaign (tags, temperatura, e-mails, UTMs). `ac_contact_id` único. |
 | `crm_historico_utm` | 10 | 309 | Histórico de mudanças de UTM no CRM (preenchido pelo trigger `trg_crm_historico_utm`). |
 | `webinario_inscritos` | 14 | 4.559 | Inscritos no webinário por semana (AC). Único por `(contato_id, numero_semana)`. |
-| `webinario_presencas` | 7 | 640 | Presença AO VIVO (webhook Hotwebnar). Único por `(contato_id, numero_semana)`. |
+| `webinario_presencas` | 7 | 640 | Presença AO VIVO (webhook Hotwebnar). Único por `(contato_id, numero_semana)`. FK `numero_semana → webinario_semanas` (repointado em 2026-06-10; antes apontava p/ a legada `webinario_semanas_presencas`, o que causava 500 toda semana nova). |
 | `sendflow_grupos` | 13 | 30 | Grupos de WhatsApp por campanha Sendflow. |
 | `sendflow_metricas` | 6 | 20 | Métricas diárias dos grupos (entradas/saídas/cliques). |
 | `sendflow_eventos_grupo` | 8 | 1.829 | Eventos brutos de grupo (entrou/saiu). `evento_id` único. |
@@ -42,9 +42,9 @@
 | `lead_score_pontos` | 4 | **Scorecard do Lead Score WEBN** (config editável). 51 linhas: `(variavel, resposta)` único → `pontos`. Editável p/ re-score sem mudar código. Lida pela RPC `calcular_lead_score`. |
 | `integration_job_runs` | 13 | Histórico de execução dos jobs (status, registros, duração). ~5.194 linhas. |
 | `meta_ad_accounts` | 8 | Contas de anúncio Meta cadastradas. INSERT dispara sync inicial (trigger). |
-| `semana_config` | 6 | Configuração das semanas (dia/hora de virada em BRT). 3 entidades: `captacao` (Ter→Ter, rege CRM/Grupos), `webn` (Ter→Ter 20:00, rege Vendas/Webinário), `trafego` (Qua→Ter, rege só o Tráfego — Meta entrega gasto só por data, sem hora). |
-| `webinario_semanas` | 5 | Definição das semanas de webinário (data_inicio / data_evento / fim). |
-| `webinario_semanas_presencas` | 5 | Relação semana ↔ presenças (apoio). |
+| `semana_config` | 6 | Configuração das semanas (dia/hora de virada em BRT). 3 entidades: `captacao` (Ter→Ter 19:30, rege CRM/Grupos), `webn` (Ter→Ter **19:40**, rege Vendas/Webinário — antecipado de 20:00 em 2026-06-10 p/ virar antes do ao vivo ~19:56), `trafego` (Qua→Ter, rege só o Tráfego — Meta entrega gasto só por data, sem hora). |
+| `webinario_semanas` | 5 | Régua MASTER das semanas de webinário (data_inicio / data_evento / fim). Criada sozinha pelo cron `ensure-proxima-semana` (`ensure_semana_existe`). FK de `webinario_presencas` e `webinario_inscritos` aponta aqui. |
+| `webinario_semanas_presencas` | 5 | **LEGADA** (sem urgência de drop — ver `PENDENCIAS.md` 1b). Não é mais exigida por nenhum FK desde 2026-06-10. |
 | `filtros_personalizados` | 7 | Filtros salvos por módulo (trafego/vendas/...). |
 | `filtros_personalizados_regras` | 7 | Regras de cada filtro salvo. |
 | `dashboard_abas` | 6 | Abas dinâmicas do dashboard. `tipo_mockup` (venda_direta/captacao) define o layout; `ordem`/`ativo`. Nome único (case-insensitive). A aba "Webnário" do dashboard NÃO entra aqui (é fixa no código). |

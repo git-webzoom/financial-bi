@@ -24,16 +24,15 @@
    subir a imagem base para Node 20 LTS no EasyPanel (Nixpacks: `NIXPACKS_NODE_VERSION=20` ou config equivalente).
 
 ## 🟡 Dívidas técnicas (sem urgência, sem quebra)
-1b. **Tabela `webinario_semanas_presencas` é legado** (desde 2026-06-02 — em grande parte resolvido).
-   `get_semana_webnario_ativa` e `get_periodo_semana(_,'webn')` agora **calculam** (não leem essa tabela),
-   e `ensure_semana_webnario_existe` virou **no-op** (o cron parou de inserir linhas erradas).
-   **Resta como dívida menor:**
-   - As **linhas antigas** já gravadas em `webinario_semanas_presencas` permanecem (inofensivas; nada
-     mais as lê de forma relevante). Pode-se eventualmente **dropar a tabela** e remover a chamada a
-     `ensure_semana_webnario_existe` de `auto_criar_proxima_semana` (limpeza, sem urgência).
-   - `get_periodo_semana` (caminho `'captacao'`, default) ainda mantém um `UNION ALL` com
-     `webinario_semanas_presencas` como fallback histórico; só dispara se a semana existir **apenas** lá.
-     Pode ser simplificado quando a tabela for dropada.
+1b. **Aposentar `webinario_semanas_presencas` — Fase 2 (limpeza final, sem urgência).**
+   Em **2026-06-10** o FK de `webinario_presencas` foi repointado para `webinario_semanas` (MASTER),
+   então a tabela legada **não é mais exigida por nenhum FK** (era a causa do bug 500 toda terça —
+   ver CHANGELOG 2026-06-10). **Resta apenas a limpeza (fazer após validar 16/06 e idealmente 23/06):**
+   - `DROP TABLE webinario_semanas_presencas` (as linhas antigas viraram inertes).
+   - Remover a chamada `ensure_semana_webnario_existe(...)` de `auto_criar_proxima_semana` e dropar a
+     função no-op `ensure_semana_webnario_existe`.
+   - Remover o `UNION ALL ... webinario_semanas_presencas` do caminho `'captacao'` de
+     `get_periodo_semana` (fallback histórico; só dispara se a semana existir **apenas** lá).
 2. **`getToken()` duplicado** nas Edge Functions (meta-ads, sendflow, activecampaign, manager-guru).
    Cada uma reimplementa a busca de token. Centralizar em `supabase/functions/_shared/` reduziria erro.
    Cuidado: assinaturas diferem (algumas precisam de `config`/`expires_at`).
@@ -44,11 +43,12 @@
 5. **Scripts de import em CommonJS** (`scripts/*.js`) — inconsistente com TS/ESM do resto. Migração é mecânica.
 6. **Logging não-estruturado** nas Edge Functions (`console.log` texto puro). Migrar p/ JSON ajuda observabilidade
    — risco médio: conferir antes se há algum alerta no dashboard que faz parse do texto atual.
-7. **Drift de `semana_config` (banco ≠ migration).** O banco real tem `captacao`=19:30/19:29 e `webn`=20:00/19:59
-   (editados pela tela de Configurações). A migration `20260521000001_simplify_semana_config.sql` versiona 20:00/19:59
-   para ambos. A fonte da verdade é o banco (a config é gerenciada pela UI), mas um rebuild a partir das migrations
-   reintroduziria os valores antigos. Avaliar: ou parar de versionar os valores em migration, ou criar uma migration
-   de reconciliação quando a config estabilizar. Hoje não quebra — só atenção em recriação do banco.
+7. **Drift de `semana_config` (banco ≠ migration).** O banco real tem `captacao`=19:30/19:29 e
+   **`webn`=19:40/19:39** (antecipado em 2026-06-10 via `20260610114500_semana_config_webn_1940.sql`, para a
+   semana virar antes do webinário começar ~19:56). A migration base `20260521000001_simplify_semana_config.sql`
+   ainda versiona 20:00/19:59 para ambos; a migration de 2026-06-10 corrige a `webn`, mas a `captacao`=19:30
+   continua só no banco (editada pela tela de Configurações). A fonte da verdade é o banco (config gerenciada
+   pela UI). Hoje não quebra — só atenção em recriação do banco a partir das migrations.
 
 8. **Lead Score: só a tabela de pontos (falta a regressão logística completa).** Hoje o `/crm`
    usa a **scorecard** (`lead_score_pontos` + `calcular_lead_score`), aproximação interpretável

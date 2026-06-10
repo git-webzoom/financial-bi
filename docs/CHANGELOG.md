@@ -16,6 +16,33 @@
 
 ---
 
+## [2026-06-10] Correção definitiva: webinário perdia acessos toda terça (500/FK) + virada de semana — @claude
+- **O quê:** três mudanças que, juntas, acabam com o bug recorrente "o webinário não muda de semana e
+  perde os primeiros acessos ao vivo":
+  1. **FK repointado** — `webinario_presencas.numero_semana` passou a referenciar `webinario_semanas`
+     (régua MASTER, criada sozinha pelo cron), em vez da legada `webinario_semanas_presencas`. Migration
+     `20260610114400_fk_presencas_para_master.sql` (com guarda anti-órfãs antes do `ALTER`).
+  2. **Virada antecipada** — `semana_config('webn')` mudou de **20:00→19:59** para **19:40→19:39** (BRT).
+     Migration `20260610114500_semana_config_webn_1940.sql`. Front e webhook leem a mesma
+     `get_semana_webnario_ativa()`, então os dois passam a virar juntos **antes** do webinário começar
+     (~19:56). **Afeta também a régua de Vendas** (mesma entidade `webn`) — decisão do responsável.
+  3. **Webhook blindado** — `webhook-hotwebnar` agora chama `ensure_semana_existe(numeroSemana)` antes do
+     upsert e, se ainda violar FK (`23503`), cria a semana e tenta o upsert mais uma vez. Nunca mais
+     retorna 500 por semana inexistente. **Redeploy feito (v5, verify_jwt=false preservado).**
+- **Causa raiz (confirmada no banco real, migrations estavam desatualizadas):** o FK exigia
+  `webinario_semanas_presencas`, mas a criação automática dessa régua (`ensure_semana_webnario_existe`)
+  virou **no-op em 02/06**. Toda semana nova nascia sem linha lá → `upsert_presenca_webn` violava o FK →
+  webhook dava 500 e o acesso era perdido. Além disso, a virada às 20:00 era tarde (acessos começam 19:56).
+- **Como testou:** banco real — FK agora aponta para `webinario_semanas` (`information_schema`); 0 órfãs;
+  `get_semana_webnario_ativa()`=176 com `regua_existe=true`; período `webn` da semana ativa = ter 19:40→19:39;
+  blindagem validada (`ensure_semana_existe(178)` criou a 178 com datas encadeadas corretas); E2E
+  `upsert_presenca_webn` gravou na 176 sem FK error (registro de teste removido depois); `npm run build` OK.
+- **Impacto/risco:** **baixo e aditivo.** FK passou a apontar para tabela que já contém 100% das semanas;
+  blindagem é idempotente; horário propaga em tempo real (sem cache/ISR). A tabela `webinario_semanas_presencas`
+  foi **mantida 1 ciclo** como rede de segurança (Fase 2: dropar + remover fallback de `get_periodo_semana`
+  após validar 16/06). Timing 16/06: cron cria régua 178 às 19:30, webn vira 19:40, acessos caem 19:56 → sem race.
+- **Docs atualizados:** `TABELAS.md`, `FUNCOES-SQL.md`, `EDGE-FUNCTIONS.md`, `PENDENCIAS.md`, este CHANGELOG.
+
 ## [2026-06-05] Performance por anúncio nas abas TPW/Desafio (frontend) — @claude
 - **O quê:** novo componente `dashboard/_components/TabelaAdsPerformance.tsx` renderizado no mockup
   **venda_direta** (`TpwClient`), abaixo dos KPIs/funil/tabela de vendas. Mostra **análise de mídia por
