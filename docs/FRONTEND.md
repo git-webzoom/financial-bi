@@ -28,7 +28,7 @@ src/
 │   ├── page.tsx                       Redireciona p/ dashboard ou login
 │   ├── (autenticado)/                 Grupo protegido (middleware)
 │   │   ├── layout.tsx                 Shell (sidebar/header)
-│   │   ├── dashboard/                 KPIs (aba Webnário fixa + abas dinâmicas de dashboard_abas)
+│   │   ├── dashboard/                 KPIs (aba Webnário fixa + abas dinâmicas de dashboard_abas; seletor de abas = SeletorAbas.tsx, carrossel c/ scroll + setas)
 │   │   ├── vendas/                    Tabela de vendas + filtros + drawer
 │   │   ├── crm/                       CRM por semana (captação)
 │   │   ├── trafego/                   Meta Ads (KPIs, gráfico, tabela)

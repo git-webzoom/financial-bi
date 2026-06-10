@@ -6,17 +6,11 @@ import { montarAbas } from '@/lib/dashboard-abas'
 import type { DashboardAba } from '@/lib/dashboard-abas'
 import TpwClient from './_components/TpwClient'
 import WebinarioClient from './_components/WebinarioClient'
+import SeletorAbas from './_components/SeletorAbas'
 
 // Aba "Webnário" é caso à parte (será construída separadamente) — fica fixa,
 // fora da tabela dashboard_abas. As demais abas vêm do banco.
 const WEBN_KEY = '__webnario__'
-
-function botaoEstilo(ativo: boolean): React.CSSProperties {
-  return {
-    backgroundColor: ativo ? '#C9A84C' : 'transparent',
-    color: ativo ? '#0A0A0A' : '#888888',
-  }
-}
 
 export default function DashboardPage() {
   const supabase = createClient()
@@ -60,34 +54,13 @@ export default function DashboardPage() {
   return (
     <div className="p-4 md:p-6 space-y-5 md:space-y-6">
 
-      {/* Abas */}
-      <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
-        {/* Webnário — fixa (placeholder; construída à parte) */}
-        <button
-          key={WEBN_KEY}
-          onClick={() => setAbaAtivaId(WEBN_KEY)}
-          className="px-5 py-2 rounded-lg text-sm font-medium transition-all"
-          style={botaoEstilo(abaAtivaId === WEBN_KEY)}
-        >
-          Webinário
-        </button>
-
-        {/* Abas dinâmicas (dashboard_abas) */}
-        {abas.map((aba) => (
-          <button
-            key={aba.id}
-            onClick={() => setAbaAtivaId(aba.id)}
-            className="px-5 py-2 rounded-lg text-sm font-medium transition-all"
-            style={botaoEstilo(abaAtivaId === aba.id)}
-          >
-            {aba.nome}
-          </button>
-        ))}
-
-        {carregando && (
-          <span className="px-3 py-2 text-xs self-center" style={{ color: '#555555' }}>carregando…</span>
-        )}
-      </div>
+      {/* Abas — Webinário fixa antes das dinâmicas (dashboard_abas) */}
+      <SeletorAbas
+        abas={[{ id: WEBN_KEY, nome: 'Webinário' }, ...abas.map(a => ({ id: a.id, nome: a.nome }))]}
+        ativaId={abaAtivaId}
+        onSelect={setAbaAtivaId}
+        carregando={carregando}
+      />
 
       {/* Conteúdo das abas */}
       {abaAtivaId === WEBN_KEY && <WebinarioClient />}

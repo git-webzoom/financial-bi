@@ -16,6 +16,27 @@
 
 ---
 
+## [2026-06-10] Dashboard: seletor de abas vira carrossel (scroll + setas) — @claude
+- **O quê:** novo componente `dashboard/_components/SeletorAbas.tsx` substitui o `flex w-fit` inline
+  que **espremia as abas no mobile** quando havia muitas (Webinário, TPW R$97, TPW R$147, Desafio…).
+  Agora as abas mantêm o tamanho natural numa faixa com `overflow-x-auto` (arrasta o dedo no mobile)
+  e **setas ‹ › flutuantes** nas pontas (com fade p/ `#111111`) navegam ~80% da largura por clique.
+- **UX:** as setas **só aparecem quando há overflow** (`canLeft`/`canRight` calculados de
+  `scrollLeft/scrollWidth/clientWidth` no `onScroll` + `ResizeObserver`); cabendo tudo (desktop poucas
+  abas) ficam invisíveis (`opacity:0`+`pointerEvents:none`) — visual idêntico ao anterior. A **aba
+  ativa centraliza** ao trocar (`scrollIntoView inline:'center', block:'nearest'` — não rola a página).
+  Vale mobile **e** desktop. Reusa padrão já existente (scroll de abas do `ConfiguracoesClient`, setas
+  lucide do `SeletorSemana`). Sem libs novas.
+- **globals.css:** adicionada util `.no-scrollbar::-webkit-scrollbar { display:none }` (Chrome);
+  Firefox/Edge já cobertos pelo `scrollbarWidth:none` inline.
+- **Como testou:** `npm run build` OK (`/dashboard` 16→16.6 kB c/ as setas lucide); `npm run lint` sem
+  novos warnings nos arquivos. (Build exigiu `NODE_OPTIONS=--max-old-space-size=4096` por falta de RAM
+  na máquina — não é problema do código.) Verificação visual no navegador NÃO foi feita (exigiria
+  subir dev+login+mock de muitas abas); a lógica replica componente já validado em produção.
+- **Impacto/risco:** **frontend puro**, sem mudança de dados. `page.tsx` perdeu o `botaoEstilo` (migrou
+  pro componente) e o bloco inline de abas. Conteúdo das abas inalterado.
+- **Docs atualizados:** `FRONTEND.md`, este CHANGELOG.
+
 ## [2026-06-10] /webnario: remove KPIs "Compradores" e "Taxa de Conversão" — @claude
 - **O quê:** em `webnario/_components/WebnarioKpis.tsx`, removidos os 2 cards **"Compradores"** e
   **"Taxa de Conversão"** (a contagem de compras estava incorreta nesse contexto). Sobram 2 KPIs

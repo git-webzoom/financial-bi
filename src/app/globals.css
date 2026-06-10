@@ -24,6 +24,9 @@ body {
 ::-webkit-scrollbar-thumb { background: #333333; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #444444; }
 
+/* Oculta a scrollbar (ex.: carrossel de abas) — Firefox/Edge via inline scrollbarWidth */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 /* Inputs nativos de data no tema escuro */
 input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0.6);
