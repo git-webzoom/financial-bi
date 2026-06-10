@@ -16,6 +16,20 @@
 
 ---
 
+## [2026-06-10] /webnario: remove KPIs "Compradores" e "Taxa de Conversão" — @claude
+- **O quê:** em `webnario/_components/WebnarioKpis.tsx`, removidos os 2 cards **"Compradores"** e
+  **"Taxa de Conversão"** (a contagem de compras estava incorreta nesse contexto). Sobram 2 KPIs
+  corretos: **Acessaram ao Vivo** e **Ficaram até o Pitch** (com % de retenção). Grid ajustado de
+  `lg:grid-cols-4` para `grid-cols-2`. Removidas as variáveis órfãs `compradores`/`taxaConversao`.
+- **Por quê:** os números de compradores/conversão não batiam (pedido do usuário para retirar).
+- **Mantido:** o campo `comprou` continua no tipo `PresencaWebn` e é usado na **tabela** (coluna
+  "COMPROU") e no **CSV** — não foi tocado. Só os KPIs saíram.
+- **Como testou:** `npm run build` OK (`/webnario` 5.34→5.24 kB); `npm run lint` sem novos warnings
+  no arquivo (os erros restantes são pré-existentes em outros arquivos).
+- **Impacto/risco:** **frontend puro**, sem mudança de dados/contrato. Nenhuma migration/deploy de
+  função.
+- **Docs atualizados:** este CHANGELOG.
+
 ## [2026-06-10] Correção definitiva: webinário perdia acessos toda terça (500/FK) + virada de semana — @claude
 - **O quê:** três mudanças que, juntas, acabam com o bug recorrente "o webinário não muda de semana e
   perde os primeiros acessos ao vivo":
