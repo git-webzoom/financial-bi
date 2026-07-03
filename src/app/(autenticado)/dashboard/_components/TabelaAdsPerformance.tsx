@@ -11,10 +11,14 @@ import type { RegraFiltro } from '@/lib/filtros-personalizados'
 
 // Performance por anúncio das abas venda_direta (TPW/Desafio). Busca a RPC get_trafego_ads_aba
 // (1 linha por anúncio, já agregada e com as taxas calculadas no banco) e renderiza:
-//   1) tabela (desktop) / cards (mobile) com Tipo, CPM, Hook, Hold, Click, Gasto, Checkouts
+//   1) tabela (desktop) / cards (mobile) com Tipo, CPM, Hook, Hold, Click, Gasto, Checkouts + VENDAS por anúncio
 //   2) ranking horizontal por gasto
 //   3) scatter Hook Rate × Gasto (só anúncios de vídeo)
-// Venda/CPA/ROAS NÃO entram aqui (vendas não carregam o anúncio) — ficam nos KPIs da aba.
+//
+// VENDAS por anúncio (Nº Vendas, R$, CPA, ROAS): cruzamento em memória vendas.utm_content === trafego.ad_name.
+// As compras chegam pela prop `vendas` (as MESMAS que alimentam os KPIs da aba, 1 linha/compra). A soma das
+// vendas atribuídas + a linha "Sem anúncio identificado" FECHA 100% com o KPI "Nº de Vendas" / "R$ Vendas".
+// ~84% das vendas TPW não têm utm_content casável e caem em "Sem anúncio" (esperado).
 
 export interface AdPerf {
   ad_name:             string
@@ -123,15 +127,24 @@ function TooltipScatter({ active, payload }: { active?: boolean; payload?: Array
 }
 
 // ─── Componente principal ────────────────────────────────────────────────────────────────────
-type Ordenacao = 'gasto' | 'hook' | 'cpm'
+type Ordenacao = 'gasto' | 'hook' | 'cpm' | 'vendas' | 'roas'
+
+// Shape mínimo de uma COMPRA (1 linha/compra) — evita acoplar ao tipo Venda completo.
+// utm_content herdado da MÃE (via ...mae em montarComprasFiltradas); valor_total_grupo = mãe + bumps aprovados.
+export interface VendaAttr {
+  utm_content:        string | null
+  valor_total_grupo?: number | null
+  valor_venda?:       number | null  // fallback defensivo
+}
 
 interface Props {
   filtroTrafegoId?: string | null
   inicio:           string  // 'YYYY-MM-DD'
   fim:              string
+  vendas?:          VendaAttr[]  // compras (1 linha/compra) já filtradas/aprovadas — mesmas dos KPIs da aba
 }
 
-export default function TabelaAdsPerformance({ filtroTrafegoId = null, inicio, fim }: Props) {
+export default function TabelaAdsPerformance({ filtroTrafegoId = null, inicio, fim, vendas = [] }: Props) {
   const supabase = createClient()
   const [ads,        setAds]        = useState<AdPerf[]>([])
   const [carregando, setCarregando] = useState(true)
@@ -161,13 +174,67 @@ export default function TabelaAdsPerformance({ filtroTrafegoId = null, inicio, f
 
   useEffect(() => { buscar() }, [buscar])
 
+  // ─── Vendas por anúncio (cruzamento em memória: utm_content === ad_name) ──────────────────────
+  // Normaliza só com trim() — o banco (medido) mostra 0 matches ganhos por lower(): utm_content e ad_name
+  // batem por igualdade exata. Se um dia surgir divergência de caixa, trocar por .trim().toLowerCase()
+  // AQUI e no Set `conhecidos` simultaneamente.
+  const norm = (s: string | null | undefined) => (s ?? '').trim()
+  const valorCompra = (v: VendaAttr) => v.valor_total_grupo ?? v.valor_venda ?? 0
+
+  const { porAnuncio, semAnuncio, totVendas, totReceita } = useMemo(() => {
+    // "conhecidos" = SOMENTE os ad_names presentes no array `ads` renderizado (não o banco todo).
+    // Assim toda venda cujo anúncio não está na tabela (utm vazio/lixo, ou anúncio descartado pelo HAVING
+    // da RPC) cai em "Sem anúncio" e a soma FECHA com o KPI, independentemente de dados futuros.
+    const conhecidos = new Set(ads.map(a => norm(a.ad_name)))
+    const mapa = new Map<string, { nVendas: number; receita: number }>()
+    let semN = 0, semR = 0, totR = 0
+
+    for (const v of vendas) {
+      const key = norm(v.utm_content)
+      const val = valorCompra(v)
+      totR += val
+      if (key !== '' && conhecidos.has(key)) {
+        const cur = mapa.get(key) ?? { nVendas: 0, receita: 0 }
+        cur.nVendas += 1
+        cur.receita += val
+        mapa.set(key, cur)
+      } else {
+        semN += 1
+        semR += val
+      }
+    }
+
+    // Invariante (dev-only): atribuídas + sem anúncio == total de compras (== KPI Nº de Vendas).
+    if (process.env.NODE_ENV !== 'production' && vendas.length > 0) {
+      let soma = semN
+      mapa.forEach(x => { soma += x.nVendas })
+      if (soma !== vendas.length) {
+        console.warn(`[TabelaAdsPerformance] invariante furou: Σ vendas por anúncio (${soma}) != compras (${vendas.length})`)
+      }
+    }
+
+    return { porAnuncio: mapa, semAnuncio: { nVendas: semN, receita: semR }, totVendas: vendas.length, totReceita: totR }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ads, vendas])
+
+  const vendasDe = (adName: string) => porAnuncio.get(norm(adName)) ?? { nVendas: 0, receita: 0 }
+  const cpaDe  = (nV: number, gasto: number)  => (nV > 0    ? gasto / nV    : null)  // 0 vendas → traço
+  const roasDe = (rec: number, gasto: number) => (gasto > 0 ? rec / gasto   : null)  // 0 gasto  → traço
+
   const adsOrdenados = useMemo(() => {
     const arr = [...ads]
-    if (ordenacao === 'gasto') arr.sort((a, b) => b.gasto - a.gasto)
-    if (ordenacao === 'cpm')   arr.sort((a, b) => (b.cpm ?? 0) - (a.cpm ?? 0))
-    if (ordenacao === 'hook')  arr.sort((a, b) => (b.hook_rate ?? -1) - (a.hook_rate ?? -1))
+    if (ordenacao === 'gasto')  arr.sort((a, b) => b.gasto - a.gasto)
+    if (ordenacao === 'cpm')    arr.sort((a, b) => (b.cpm ?? 0) - (a.cpm ?? 0))
+    if (ordenacao === 'hook')   arr.sort((a, b) => (b.hook_rate ?? -1) - (a.hook_rate ?? -1))
+    if (ordenacao === 'vendas') arr.sort((a, b) => vendasDe(b.ad_name).nVendas - vendasDe(a.ad_name).nVendas)
+    if (ordenacao === 'roas')   arr.sort((a, b) => {
+      const ra = roasDe(vendasDe(a.ad_name).receita, a.gasto) ?? -1
+      const rb = roasDe(vendasDe(b.ad_name).receita, b.gasto) ?? -1
+      return rb - ra
+    })
     return arr
-  }, [ads, ordenacao])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ads, ordenacao, porAnuncio])
 
   // Dados dos gráficos (derivados da mesma busca — sem nova query)
   const dadosRank: RankDado[] = useMemo(
@@ -181,10 +248,13 @@ export default function TabelaAdsPerformance({ filtroTrafegoId = null, inicio, f
     [ads]
   )
 
-  // Totais (rodapé) — apenas mídia; venda/CPA/ROAS ficam nos KPIs da aba
+  // Totais (rodapé). Mídia (gasto/CPM) da RPC; vendas (nº/R$/CPA/ROAS) do cruzamento — devem bater
+  // com os KPIs da aba (mesmo gasto total, mesmas compras totais).
   const totGasto = ads.reduce((s, a) => s + a.gasto, 0)
   const totImpr  = ads.reduce((s, a) => s + a.impressoes, 0)
   const cpmGeral = totImpr > 0 ? (totGasto / totImpr) * 1000 : null
+  const cpaGeral  = cpaDe(totVendas, totGasto)
+  const roasGeral = roasDe(totReceita, totGasto)
 
   const btnOrd = (val: Ordenacao, label: string) => (
     <button
@@ -211,6 +281,8 @@ export default function TabelaAdsPerformance({ filtroTrafegoId = null, inicio, f
             {btnOrd('gasto', 'Gasto')}
             {btnOrd('hook', 'Hook')}
             {btnOrd('cpm', 'CPM')}
+            {btnOrd('vendas', 'Vendas')}
+            {btnOrd('roas', 'ROAS')}
           </div>
         </div>
 
@@ -226,11 +298,12 @@ export default function TabelaAdsPerformance({ filtroTrafegoId = null, inicio, f
           </div>
         ) : (
           <>
-            {/* Desktop: tabela */}
+            {/* Desktop: tabela. min-w garante que, quando não couber (notebook/tela média), a tabela
+                ROLA na horizontal (overflow-x-auto do pai) em vez de espremer as 11 colunas. */}
             <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm" style={{ color: '#DDDDDD' }}>
+              <table className="w-full min-w-[860px] text-sm" style={{ color: '#DDDDDD' }}>
                 <thead>
-                  <tr style={{ color: '#777777' }} className="text-[11px] uppercase tracking-wide text-left">
+                  <tr style={{ color: '#777777' }} className="text-[11px] uppercase tracking-wide text-left whitespace-nowrap">
                     <th className="pb-2 font-medium">Anúncio</th>
                     <th className="pb-2 font-medium text-right">Gasto</th>
                     <th className="pb-2 font-medium text-right">CPM</th>
@@ -238,10 +311,18 @@ export default function TabelaAdsPerformance({ filtroTrafegoId = null, inicio, f
                     <th className="pb-2 font-medium">Hold</th>
                     <th className="pb-2 font-medium">Click</th>
                     <th className="pb-2 font-medium text-right">Checkouts</th>
+                    <th className="pb-2 pl-4 font-medium text-right" style={{ color: GOLD, borderLeft: '1px solid #2A1E08' }}>Nº Vendas</th>
+                    <th className="pb-2 pl-4 font-medium text-right" style={{ color: GOLD }}>R$ Vendas</th>
+                    <th className="pb-2 pl-4 font-medium text-right" style={{ color: GOLD }}>CPA</th>
+                    <th className="pb-2 pl-4 font-medium text-right" style={{ color: GOLD }}>ROAS</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {adsOrdenados.map((a) => (
+                  {adsOrdenados.map((a) => {
+                    const vd   = vendasDe(a.ad_name)
+                    const cpa  = cpaDe(vd.nVendas, a.gasto)
+                    const roas = roasDe(vd.receita, a.gasto)
+                    return (
                     <tr key={a.ad_id ?? a.ad_name} style={{ borderTop: '1px solid #1A1A1A' }}>
                       <td className="py-2.5 pr-3">
                         <div className="flex items-center gap-2">
@@ -255,8 +336,26 @@ export default function TabelaAdsPerformance({ filtroTrafegoId = null, inicio, f
                       <td className="py-2.5 pr-3"><TaxaCell valor={a.hold_rate} faixa={FAIXA_HOLD} /></td>
                       <td className="py-2.5 pr-3"><TaxaCell valor={a.click_rate} faixa={FAIXA_CLICK} /></td>
                       <td className="py-2.5 text-right tabular-nums">{fmtNum(a.checkouts_initiated)}</td>
+                      <td className="py-2.5 pl-4 text-right tabular-nums whitespace-nowrap" style={{ color: vd.nVendas > 0 ? '#FFFFFF' : '#555555', borderLeft: '1px solid #2A1E08' }}>{fmtNum(vd.nVendas)}</td>
+                      <td className="py-2.5 pl-4 text-right tabular-nums whitespace-nowrap" style={{ color: vd.receita > 0 ? '#FFFFFF' : '#555555' }}>{vd.receita > 0 ? formatMoeda(vd.receita) : '—'}</td>
+                      <td className="py-2.5 pl-4 text-right tabular-nums whitespace-nowrap">{cpa != null ? formatMoeda(cpa) : '—'}</td>
+                      <td className="py-2.5 pl-4 text-right tabular-nums whitespace-nowrap" style={{ color: roas != null && roas >= 1 ? COR_BOM : '#DDDDDD' }}>{roas != null ? roas.toFixed(2) + 'x' : '—'}</td>
                     </tr>
-                  ))}
+                    )
+                  })}
+
+                  {/* Vendas sem anúncio identificável (utm vazio, lixo, ou anúncio fora da tabela).
+                      SEMPRE por último, fora da ordenação. Fecha o total com o KPI Nº de Vendas. */}
+                  {vendas.length > 0 && (
+                    <tr style={{ borderTop: '1px solid #1A1A1A' }}>
+                      <td className="py-2.5 pr-3 italic whitespace-nowrap" colSpan={6} style={{ color: '#888888' }}>Sem anúncio identificado</td>
+                      <td className="py-2.5 text-right tabular-nums" style={{ color: '#666666' }}>—</td>
+                      <td className="py-2.5 pl-4 text-right tabular-nums whitespace-nowrap" style={{ color: '#AAAAAA', borderLeft: '1px solid #2A1E08' }}>{fmtNum(semAnuncio.nVendas)}</td>
+                      <td className="py-2.5 pl-4 text-right tabular-nums whitespace-nowrap" style={{ color: '#AAAAAA' }}>{semAnuncio.receita > 0 ? formatMoeda(semAnuncio.receita) : '—'}</td>
+                      <td className="py-2.5 pl-4 text-right tabular-nums" style={{ color: '#666666' }}>—</td>
+                      <td className="py-2.5 pl-4 text-right tabular-nums" style={{ color: '#666666' }}>—</td>
+                    </tr>
+                  )}
                 </tbody>
                 <tfoot>
                   <tr style={{ borderTop: '1px solid #2A2A2A', color: '#AAAAAA' }} className="text-xs">
@@ -264,6 +363,10 @@ export default function TabelaAdsPerformance({ filtroTrafegoId = null, inicio, f
                     <td className="pt-2.5 text-right tabular-nums font-semibold" style={{ color: '#FFFFFF' }}>{formatMoeda(totGasto)}</td>
                     <td className="pt-2.5 text-right tabular-nums">{cpmGeral != null ? formatMoeda(cpmGeral) : '—'}</td>
                     <td className="pt-2.5" colSpan={4} />
+                    <td className="pt-2.5 pl-4 text-right tabular-nums font-semibold whitespace-nowrap" style={{ color: '#FFFFFF', borderLeft: '1px solid #2A1E08' }}>{fmtNum(totVendas)}</td>
+                    <td className="pt-2.5 pl-4 text-right tabular-nums font-semibold whitespace-nowrap" style={{ color: '#FFFFFF' }}>{formatMoeda(totReceita)}</td>
+                    <td className="pt-2.5 pl-4 text-right tabular-nums whitespace-nowrap">{cpaGeral != null ? formatMoeda(cpaGeral) : '—'}</td>
+                    <td className="pt-2.5 pl-4 text-right tabular-nums whitespace-nowrap">{roasGeral != null ? roasGeral.toFixed(2) + 'x' : '—'}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -271,7 +374,11 @@ export default function TabelaAdsPerformance({ filtroTrafegoId = null, inicio, f
 
             {/* Mobile: cards */}
             <div className="md:hidden space-y-2.5">
-              {adsOrdenados.map((a) => (
+              {adsOrdenados.map((a) => {
+                const vd   = vendasDe(a.ad_name)
+                const cpa  = cpaDe(vd.nVendas, a.gasto)
+                const roas = roasDe(vd.receita, a.gasto)
+                return (
                 <div key={a.ad_id ?? a.ad_name} className="rounded-lg p-3" style={{ backgroundColor: '#0D0D0D', border: '1px solid #1E1E1E' }}>
                   <div className="flex items-center gap-2 mb-2">
                     <TipoBadge tipo={a.tipo} />
@@ -285,8 +392,26 @@ export default function TabelaAdsPerformance({ filtroTrafegoId = null, inicio, f
                     <div className="flex justify-between"><span style={{ color: '#777777' }}>Hook</span><span style={{ color: corTaxa(a.hook_rate, FAIXA_HOOK) }}>{fmtPct(a.hook_rate)}</span></div>
                     <div className="flex justify-between"><span style={{ color: '#777777' }}>Hold</span><span style={{ color: corTaxa(a.hold_rate, FAIXA_HOLD) }}>{fmtPct(a.hold_rate)}</span></div>
                   </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs mt-2 pt-2" style={{ borderTop: '1px solid #2A1E08' }}>
+                    <div className="flex justify-between"><span style={{ color: GOLD }}>Nº Vendas</span><span style={{ color: vd.nVendas > 0 ? '#FFFFFF' : '#555555' }}>{fmtNum(vd.nVendas)}</span></div>
+                    <div className="flex justify-between"><span style={{ color: GOLD }}>R$ Vendas</span><span style={{ color: vd.receita > 0 ? '#FFFFFF' : '#555555' }}>{vd.receita > 0 ? formatMoeda(vd.receita) : '—'}</span></div>
+                    <div className="flex justify-between"><span style={{ color: GOLD }}>CPA</span><span>{cpa != null ? formatMoeda(cpa) : '—'}</span></div>
+                    <div className="flex justify-between"><span style={{ color: GOLD }}>ROAS</span><span style={{ color: roas != null && roas >= 1 ? COR_BOM : '#DDDDDD' }}>{roas != null ? roas.toFixed(2) + 'x' : '—'}</span></div>
+                  </div>
                 </div>
-              ))}
+                )
+              })}
+
+              {/* Card "Sem anúncio identificado" — fecha o total com o KPI Nº de Vendas */}
+              {vendas.length > 0 && (
+                <div className="rounded-lg p-3 italic" style={{ backgroundColor: '#0D0D0D', border: '1px dashed #2A1E08' }}>
+                  <p className="text-sm font-medium mb-2" style={{ color: '#888888' }}>Sem anúncio identificado</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs not-italic">
+                    <div className="flex justify-between"><span style={{ color: GOLD }}>Nº Vendas</span><span style={{ color: '#AAAAAA' }}>{fmtNum(semAnuncio.nVendas)}</span></div>
+                    <div className="flex justify-between"><span style={{ color: GOLD }}>R$ Vendas</span><span style={{ color: '#AAAAAA' }}>{semAnuncio.receita > 0 ? formatMoeda(semAnuncio.receita) : '—'}</span></div>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}

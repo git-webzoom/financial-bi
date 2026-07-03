@@ -16,6 +16,53 @@
 
 ---
 
+## [2026-07-03] Dashboard: vendas por anúncio na "Performance por Anúncio" (abas TPW/Desafio) — @claude
+- **O quê:** na `TabelaAdsPerformance.tsx` (mockup `venda_direta`), a tabela de performance por anúncio
+  ganhou colunas de **venda** por criativo — **Nº Vendas, R$ Vendas, CPA, ROAS** (destacadas em ouro,
+  desktop e mobile) — mais uma linha final **"Sem anúncio identificado"** que fecha o total. Ordenação
+  agora inclui **Vendas** e **ROAS**; o rodapé soma nº vendas / R$ / CPA-ROAS geral. `TpwClient.tsx`
+  passa 1 prop nova (`vendas={dados?.vendas ?? []}` — as MESMAS compras que alimentam os KPIs da aba).
+- **Como funciona:** cruzamento **em memória** `vendas.utm_content === trafego.ad_name` (verificado no
+  banco: são idênticos, ex. `ad55-metaads-auto-img-[AD-IMG4924- censura_tpw-robo]`). Cada compra (1 linha
+  via `montarComprasFiltradas`, herda `utm_content` da mãe) é somada por `valor_total_grupo`. Só casam
+  contra os `ad_names` **presentes na tabela** (os que a RPC `get_trafego_ads_aba` retorna) — o resto
+  (utm vazio, valor de e-mail/orgânico, anúncio sem gasto no período) cai em "Sem anúncio". Invariante
+  dev-only (`console.warn`) garante Σ vendas por anúncio + sem anúncio == nº de compras.
+- **Por quê:** os chefes (sem acesso ao gerenciador) precisam ver qual criativo gera venda p/ escalar/cortar.
+  Em 06/05 isso foi marcado "inviável" (utm_content ~99% vazio); **mudou** — hoje ~16% das vendas TPW casam
+  (o resto é esperado em "Sem anúncio"). A soma da tabela **bate 100%** com os KPIs "Nº de Vendas"/"R$ Vendas".
+- **Como testou:** `npm run build` **OK** (`Compiled successfully` + type-check + 26/26 páginas; `/dashboard`
+  16.6→17.4 kB). `npx eslint` nos 2 arquivos sem warnings (os demais são pré-existentes em outros arquivos).
+  Reconciliação no banco real (range 30d, TPW ROBO-DE-97-TRADER): atribuídas 70 + sem anúncio 204 =
+  **274 = total de compras**; R$ 9.178,77 + R$ 23.835,90 = **R$ 33.014,67 = R$ total**; gasto do rodapé
+  (com HAVING da RPC) = gasto do KPI (R$ 39.324,27 = R$ 39.324,27) → CPA/ROAS geral batem. Query abaixo.
+  (Nota do ambiente: houve falha de I/O de disco durante a sessão — resolvida ao reiniciar a máquina; o
+  build final rodou com o disco saudável.)
+- **Responsividade:** com 11 colunas, em telas médias (notebook) a tabela ficava apertada (o cabeçalho
+  "Nº VENDAS" quebrava e CPA/ROAS colavam). Ajuste: `min-w-[860px]` na `<table>` → quando não cabe, ela
+  **rola na horizontal** (via `overflow-x-auto` do pai) em vez de espremer; `whitespace-nowrap` nos
+  cabeçalhos/valores; `pl-4` dá respiro entre as colunas de venda. Cards mobile inalterados.
+- **Impacto/risco:** **FRONTEND PURO, baixo.** Sem migration, sem RPC nova, sem mudança de coluna/banco.
+  Prop `vendas` é opcional (default `[]`). Os 2 gráficos e a `TabelaVendasMini` (mesma `dados.vendas`,
+  só leitura) ficam intactos. As duas abas (TPW e Desafio) usam o mesmo `TpwClient` → cobre as duas.
+- **Query de reconciliação (ajustar `[ini]`/`[fim]` e o `nome_oferta` da aba):**
+  ```sql
+  WITH ads AS (
+    SELECT ad_name FROM trafego WHERE date_ref BETWEEN '[ini]' AND '[fim]'
+    GROUP BY ad_name HAVING COALESCE(SUM(amount_spent),0)>0 OR COALESCE(SUM(impressions),0)>0),
+  compras AS (
+    SELECT btrim(utm_content) uc FROM vendas
+    WHERE data_pedido >= '[ini]T00:00:00-03:00'::timestamptz
+      AND data_pedido <= '[fim]T23:59:59.999-03:00'::timestamptz
+      AND status IN ('approved','complete','completed','paid','active','confirmed')
+      AND venda_principal_id IS NULL AND nome_oferta ILIKE '%ROBO-DE-97-TRADER|%')
+  SELECT count(*) FILTER (WHERE uc IN (SELECT ad_name FROM ads)) atribuidas,
+         count(*) FILTER (WHERE uc IS NULL OR uc = '' OR uc NOT IN (SELECT ad_name FROM ads)) sem_anuncio,
+         count(*) total FROM compras;  -- atribuidas + sem_anuncio == total == KPI Nº de Vendas
+  ```
+- **Docs atualizados:** `FRONTEND.md` (descrição das novas colunas + linha "Sem anúncio" + cobertura ~16%),
+  este CHANGELOG.
+
 ## [2026-06-10] Dashboard: seletor de abas vira carrossel (scroll + setas) — @claude
 - **O quê:** novo componente `dashboard/_components/SeletorAbas.tsx` substitui o `flex w-fit` inline
   que **espremia as abas no mobile** quando havia muitas (Webinário, TPW R$97, TPW R$147, Desafio…).

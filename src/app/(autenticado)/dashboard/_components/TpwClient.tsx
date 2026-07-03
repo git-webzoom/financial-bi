@@ -287,9 +287,10 @@ export default function TpwClient({ filtroTrafegoId = null, filtroVendasId = nul
 
       </div>
 
-      {/* Performance por anúncio (mídia) — mesmo filtro de tráfego da aba + range confirmado.
-          Venda/CPA/ROAS NÃO aparecem por anúncio (vendas não carregam o anúncio); ficam nos KPIs acima. */}
-      <TabelaAdsPerformance filtroTrafegoId={filtroTrafegoId} inicio={rangeAplicado.inicio} fim={rangeAplicado.fim} />
+      {/* Performance por anúncio — mídia (RPC) + vendas por anúncio (cruza utm_content === ad_name em memória).
+          As MESMAS compras dos KPIs (dados.vendas, 1 linha/compra) são passadas para atribuir venda ao anúncio;
+          o que não casa cai na linha "Sem anúncio" e fecha o total com o KPI "Nº de Vendas". Mesmo range dos KPIs. */}
+      <TabelaAdsPerformance filtroTrafegoId={filtroTrafegoId} inicio={rangeAplicado.inicio} fim={rangeAplicado.fim} vendas={dados?.vendas ?? []} />
     </div>
   )
 }
