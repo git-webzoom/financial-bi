@@ -42,7 +42,7 @@
 | `lead_score_pontos` | 4 | **Scorecard do Lead Score WEBN** (config editável). 51 linhas: `(variavel, resposta)` único → `pontos`. Editável p/ re-score sem mudar código. Lida pela RPC `calcular_lead_score`. |
 | `integration_job_runs` | 13 | Histórico de execução dos jobs (status, registros, duração). ~5.194 linhas. |
 | `meta_ad_accounts` | 8 | Contas de anúncio Meta cadastradas. INSERT dispara sync inicial (trigger). |
-| `semana_config` | 6 | Configuração das semanas (dia/hora de virada em BRT). 3 entidades: `captacao` (Ter→Ter 19:30, rege CRM/Grupos), `webn` (Ter→Ter **19:40**, rege Vendas/Webinário — antecipado de 20:00 em 2026-06-10 p/ virar antes do ao vivo ~19:56), `trafego` (Qua→Ter, rege só o Tráfego — Meta entrega gasto só por data, sem hora). |
+| `semana_config` | 6 | Configuração das semanas (dia/hora de virada em BRT). 3 entidades: `captacao` (Ter→Ter 19:30, rege CRM/Grupos), `webn` (Ter→Ter **19:00**, rege Vendas/Webinário — antecipado 20:00→19:40 em 2026-06-10 e 19:40→19:00 em 2026-07-07, p/ acessos que chegam antes do ao vivo ~19:56 caírem na semana certa), `trafego` (Qua→Ter, rege só o Tráfego — Meta entrega gasto só por data, sem hora). |
 | `webinario_semanas` | 5 | Régua MASTER das semanas de webinário (data_inicio / data_evento / fim). Criada sozinha pelo cron `ensure-proxima-semana` (`ensure_semana_existe`). FK de `webinario_presencas` e `webinario_inscritos` aponta aqui. |
 | `webinario_semanas_presencas` | 5 | **LEGADA** (sem urgência de drop — ver `PENDENCIAS.md` 1b). Não é mais exigida por nenhum FK desde 2026-06-10. |
 | `filtros_personalizados` | 7 | Filtros salvos por módulo (trafego/vendas/...). |

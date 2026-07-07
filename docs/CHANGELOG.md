@@ -16,6 +16,29 @@
 
 ---
 
+## [2026-07-07] Webinário: virada da semana antecipada p/ 19:00 (fim do bug de atribuição) — @claude
+- **O quê:** `semana_config('webn')` mudou de **19:40→19:39** para **19:00→18:59** (BRT). Migration
+  `20260707191500_semana_config_webn_1900.sql` (UPDATE em `semana_config`, entidade `webn`). Também:
+  **reatribuída 1 presença** do evento de hoje (07/07 18:47) que havia caído na semana 179 → **180** (o
+  contato não tinha linha na 180, sem conflito de UNIQUE).
+- **Por quê:** mesmo após o fix de FK/500 de 2026-06-10 (que segue firme), sobrava um bug de **atribuição**
+  (não crash): `get_semana_webnario_ativa()` — lida pelo `webhook-hotwebnar` **ao gravar** a presença e pelo
+  `/webnario` **ao ler** — só virava às 19:40. Acessos ao vivo que chegam **antes** desse horário na terça
+  eram carimbados com a **semana anterior** → sumiam do painel do evento atual e inflavam a semana passada.
+  Prova ao vivo (banco real, 07/07): a presença das 18:47 caiu na 179 em vez da 180. Histórico (176–179):
+  o público chega ~19:55, então só 0–1 acesso/semana caía na faixa de risco — por isso passou quase batido
+  até vazar num evento com acesso mais cedo. Antecipar p/ 19:00 dá folga confortável antes do ao vivo (~19:56).
+- **Como testou:** banco real — após o UPDATE, `get_semana_webnario_ativa()` virou **179 → 180** na hora
+  (eram 19:11 BRT, já > 19:00); `get_periodo_semana(180,'webn')` = **07/07 19:00 → 14/07 18:59** (janela do
+  evento de hoje); presença reatribuída confirmada na 180. `npm run build` **OK**. A config é lida em tempo
+  real (sem cache/ISR), então front e webhook passaram a virar juntos imediatamente.
+- **Impacto/risco:** **baixo, só config.** Sem mudança de schema/função/edge. ⚠️ A entidade `webn` também
+  rege a **régua de Vendas** (`get_periodo_semana('webn')` / `listar_semanas_vendas`) — a virada da semana
+  de Vendas também passou p/ terça 19:00 (decisão do responsável, mesma natureza da mudança de 2026-06-10).
+  Deploy no EasyPanel (main) só para propagar os docs/migration versionados; o efeito no banco já está ativo.
+- **Docs atualizados:** `TABELAS.md` (`semana_config`), `FUNCOES-SQL.md` (`get_semana_webnario_ativa`),
+  `PENDENCIAS.md` (item 7 — drift), este CHANGELOG.
+
 ## [2026-07-03] Dashboard: vendas por anúncio na "Performance por Anúncio" (abas TPW/Desafio) — @claude
 - **O quê:** na `TabelaAdsPerformance.tsx` (mockup `venda_direta`), a tabela de performance por anúncio
   ganhou colunas de **venda** por criativo — **Nº Vendas, R$ Vendas, CPA, ROAS** (destacadas em ouro,

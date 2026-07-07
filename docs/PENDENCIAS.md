@@ -44,11 +44,12 @@
 6. **Logging não-estruturado** nas Edge Functions (`console.log` texto puro). Migrar p/ JSON ajuda observabilidade
    — risco médio: conferir antes se há algum alerta no dashboard que faz parse do texto atual.
 7. **Drift de `semana_config` (banco ≠ migration).** O banco real tem `captacao`=19:30/19:29 e
-   **`webn`=19:40/19:39** (antecipado em 2026-06-10 via `20260610114500_semana_config_webn_1940.sql`, para a
-   semana virar antes do webinário começar ~19:56). A migration base `20260521000001_simplify_semana_config.sql`
-   ainda versiona 20:00/19:59 para ambos; a migration de 2026-06-10 corrige a `webn`, mas a `captacao`=19:30
-   continua só no banco (editada pela tela de Configurações). A fonte da verdade é o banco (config gerenciada
-   pela UI). Hoje não quebra — só atenção em recriação do banco a partir das migrations.
+   **`webn`=19:00/18:59** (antecipado em 2026-06-10 de 20:00→19:40 via `20260610114500_semana_config_webn_1940.sql`
+   e em 2026-07-07 de 19:40→19:00 via `20260707191500_semana_config_webn_1900.sql`, para acessos que chegam antes
+   do ao vivo ~19:56 caírem na semana certa). A migration base `20260521000001_simplify_semana_config.sql`
+   ainda versiona 20:00/19:59 para ambos; as migrations de 2026-06-10/2026-07-07 corrigem a `webn`, mas a
+   `captacao`=19:30 continua só no banco (editada pela tela de Configurações). A fonte da verdade é o banco
+   (config gerenciada pela UI). Hoje não quebra — só atenção em recriação do banco a partir das migrations.
 
 8. **Lead Score: só a tabela de pontos (falta a regressão logística completa).** Hoje o `/crm`
    usa a **scorecard** (`lead_score_pontos` + `calcular_lead_score`), aproximação interpretável
