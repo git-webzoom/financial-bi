@@ -153,17 +153,23 @@ export default function TabelaAdsPerformance({ filtroTrafegoId = null, inicio, f
   const buscar = useCallback(async () => {
     setCarregando(true)
     try {
-      // Regras do filtro de tráfego da aba (mesmo shape de filtros_personalizados_regras).
+      // Regras + lógica (and/or) do filtro de tráfego da aba (mesmo shape de filtros_personalizados_regras).
       // Sem filtro → array vazio → a RPC traz todos os anúncios do período.
-      const { data: regrasRaw } = filtroTrafegoId
-        ? await supabase.from('filtros_personalizados_regras')
-            .select('campo, operador, valor, ordem').eq('filtro_id', filtroTrafegoId).order('ordem')
-        : { data: [] as RegraFiltro[] }
+      const [{ data: regrasRaw }, { data: cab }] = await Promise.all([
+        filtroTrafegoId
+          ? supabase.from('filtros_personalizados_regras')
+              .select('campo, operador, valor, ordem').eq('filtro_id', filtroTrafegoId).order('ordem')
+          : Promise.resolve({ data: [] as RegraFiltro[] }),
+        filtroTrafegoId
+          ? supabase.from('filtros_personalizados').select('logica').eq('id', filtroTrafegoId).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ])
 
       const { data, error } = await supabase.rpc('get_trafego_ads_aba', {
         p_inicio: inicio,
         p_fim:    fim,
         p_regras: (regrasRaw ?? []) as RegraFiltro[],
+        p_logica: (cab?.logica as string) ?? 'and',
       })
       if (error) { console.error('get_trafego_ads_aba:', error.message); setAds([]) }
       else setAds((data ?? []) as AdPerf[])

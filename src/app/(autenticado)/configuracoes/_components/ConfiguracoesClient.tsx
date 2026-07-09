@@ -8,7 +8,7 @@ import {
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight, RefreshCw, Loader2,
   Plus, Trash2, Eye, EyeOff, Save, Zap, Users, ShieldCheck, User,
 } from 'lucide-react'
-import type { FiltroPersonalizado, RegraFiltro, Modulo, Operador } from '@/lib/filtros-personalizados'
+import type { FiltroPersonalizado, RegraFiltro, Modulo, Operador, LogicaFiltro } from '@/lib/filtros-personalizados'
 import { CAMPOS_POR_MODULO, OPERADORES } from '@/lib/filtros-personalizados'
 import type { DashboardAba, TipoMockup, PapelFiltro } from '@/lib/dashboard-abas'
 import { PAPEIS_POR_MOCKUP, TIPOS_MOCKUP, montarAbas } from '@/lib/dashboard-abas'
@@ -2303,6 +2303,7 @@ function AbaFiltrosPersonalizados() {
   const [formRegras,  setFormRegras]  = useState<RegraFiltro[]>([
     { campo: 'campaign_name', operador: 'contem', valor: '', ordem: 0 },
   ])
+  const [formLogica,  setFormLogica]  = useState<LogicaFiltro>('and')
   const [salvando,    setSalvando]    = useState(false)
   const [removendoId, setRemovendoId] = useState<string | null>(null)
 
@@ -2320,7 +2321,7 @@ function AbaFiltrosPersonalizados() {
     setCarregando(true)
     const { data: filtrosData } = await supabase
       .from('filtros_personalizados')
-      .select('id, nome, modulo, ativo, criado_por, created_at')
+      .select('id, nome, modulo, ativo, criado_por, created_at, logica')
       .order('modulo').order('nome')
 
     if (!filtrosData) { setCarregando(false); return }
@@ -2348,6 +2349,7 @@ function AbaFiltrosPersonalizados() {
     setFormNome('')
     setFormModulo('trafego')
     setFormRegras([{ campo: 'campaign_name', operador: 'contem', valor: '', ordem: 0 }])
+    setFormLogica('and')
     setFormAberto(true)
   }
 
@@ -2359,6 +2361,7 @@ function AbaFiltrosPersonalizados() {
       ? f.regras.map(r => ({ ...r }))
       : [{ campo: CAMPOS_POR_MODULO[f.modulo as Modulo][0].value, operador: 'contem' as Operador, valor: '', ordem: 0 }]
     )
+    setFormLogica((f.logica as LogicaFiltro) ?? 'and')
     setFormAberto(true)
   }
 
@@ -2382,6 +2385,9 @@ function AbaFiltrosPersonalizados() {
     if (!formNome.trim()) { setMsg({ type: 'err', text: 'Informe um nome para o filtro.' }); return }
     if (formRegras.some(r => !r.valor.trim())) { setMsg({ type: 'err', text: 'Preencha o valor de todas as regras.' }); return }
 
+    // Com menos de 2 regras a lógica é irrelevante — normaliza para 'and' e não persiste 'or' órfão.
+    const logicaFinal: LogicaFiltro = formRegras.length > 1 ? formLogica : 'and'
+
     setSalvando(true)
     setMsg(null)
 
@@ -2389,7 +2395,7 @@ function AbaFiltrosPersonalizados() {
       if (editando) {
         const { error: errFiltro } = await supabase
           .from('filtros_personalizados')
-          .update({ nome: formNome.trim(), modulo: formModulo, updated_at: new Date().toISOString() })
+          .update({ nome: formNome.trim(), modulo: formModulo, logica: logicaFinal, updated_at: new Date().toISOString() })
           .eq('id', editando.id)
         if (errFiltro) throw new Error(errFiltro.message)
 
@@ -2408,7 +2414,7 @@ function AbaFiltrosPersonalizados() {
       } else {
         const { data: novoFiltro, error: errFiltro } = await supabase
           .from('filtros_personalizados')
-          .insert({ nome: formNome.trim(), modulo: formModulo })
+          .insert({ nome: formNome.trim(), modulo: formModulo, logica: logicaFinal })
           .select('id')
           .single()
         if (errFiltro || !novoFiltro) throw new Error(errFiltro?.message ?? 'Erro ao criar filtro.')
@@ -2618,6 +2624,40 @@ function AbaFiltrosPersonalizados() {
               </button>
             </div>
 
+            {/* Lógica de combinação — só faz diferença com 2+ regras */}
+            {formRegras.length > 1 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide" style={{ color: '#888888' }}>Combinar regras</p>
+                <div className="inline-flex rounded-lg overflow-hidden" style={{ border: '1px solid #333333' }}>
+                  {([
+                    { value: 'and' as LogicaFiltro, label: 'Todas as regras (E)' },
+                    { value: 'or'  as LogicaFiltro, label: 'Qualquer regra (OU)' },
+                  ]).map(opt => {
+                    const ativo = formLogica === opt.value
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setFormLogica(opt.value)}
+                        className="px-3 py-1.5 text-xs font-medium transition-colors"
+                        style={{
+                          backgroundColor: ativo ? '#C9A84C' : 'transparent',
+                          color:           ativo ? '#000000' : '#888888',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-xs" style={{ color: '#555555' }}>
+                  {formLogica === 'or'
+                    ? 'O registro passa se atender a QUALQUER uma das regras.'
+                    : 'O registro só passa se atender a TODAS as regras.'}
+                </p>
+              </div>
+            )}
+
             <div className="flex items-center gap-3 pt-2">
               <button
                 onClick={salvar}
@@ -2688,7 +2728,7 @@ function AbaFiltrosPersonalizados() {
                                 <span style={{ color: '#888888' }}>{campoLabel}</span>
                                 {' '}<span style={{ color: '#C9A84C' }}>{opLabel}</span>
                                 {' '}<span style={{ color: '#FFFFFF' }}>&quot;{r.valor}&quot;</span>
-                                {i < f.regras.length - 1 && <span style={{ color: '#444444' }}> + AND</span>}
+                                {i < f.regras.length - 1 && <span style={{ color: '#444444' }}> + {f.logica === 'or' ? 'OU' : 'AND'}</span>}
                               </p>
                             )
                           })}

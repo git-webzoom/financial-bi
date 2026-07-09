@@ -60,6 +60,7 @@ src/
 
 ## Regras de UI já existentes
 - Tema escuro/gold (`#C9A84C` sobre `#111`).
-- Filtros salvos por módulo: tabelas `filtros_personalizados` (+ `_regras`).
+- Filtros salvos por módulo: tabelas `filtros_personalizados` (+ `_regras`). Cada filtro tem uma **lógica de combinação** (`logica` = `'and'`/`'or'`): "Todas as regras (E)" ou "Qualquer regra (OU)". O seletor no formulário só aparece com 2+ regras. A aplicação é feita por `aplicarRegras(q, regras, logica)` em `lib/filtros-personalizados.ts` (modo OR = um único `.or()` do PostgREST; coringa `*` e valores entre aspas via `orVal()`). Espelhos: `TrafegoClient` reusa essa função; a RPC `get_trafego_ads_aba` recebe `p_logica`.
+
 - Abas do dashboard: criadas em Configurações (`dashboard_abas` + `dashboard_aba_filtros`); um único componente-template por `tipo_mockup` (editar o template muda todas as abas daquele tipo). Sem filtro num papel = soma tudo no range.
 - Ao mudar Props de um componente compartilhado, **verificar todos os usos** (regra do CLAUDE.md).

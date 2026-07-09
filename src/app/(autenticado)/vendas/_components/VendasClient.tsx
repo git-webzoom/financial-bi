@@ -339,7 +339,7 @@ export default function VendasClient({
     async function carregarFiltrosSalvos() {
       const { data: filtrosData } = await supabase
         .from('filtros_personalizados')
-        .select('id, nome, modulo, ativo, criado_por, created_at')
+        .select('id, nome, modulo, ativo, criado_por, created_at, logica')
         .eq('modulo', 'vendas')
         .eq('ativo', true)
         .order('nome')
@@ -501,7 +501,7 @@ export default function VendasClient({
         if (params.status)      qAll = qAll.eq('status', params.status)
         if (params.pagamento)   qAll = qAll.ilike('pagamento', `%${params.pagamento}%`)
         if (params.marketplace) qAll = qAll.eq('marketplace', params.marketplace)
-        qAll = aplicarRegras(qAll, filtroPersonalizadoRef.current.regras)
+        qAll = aplicarRegras(qAll, filtroPersonalizadoRef.current.regras, filtroPersonalizadoRef.current.logica ?? 'and')
 
         const linhasFiltradas = ((await qAll).data as Venda[]) ?? []
         calcularKpisLocais(linhasFiltradas)                 // conta compras distintas; soma só linhas do filtro

@@ -5,7 +5,7 @@ import { ChevronDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatMoeda } from '@/lib/format'
 import { aplicarRegras } from '@/lib/filtros-personalizados'
-import type { RegraFiltro } from '@/lib/filtros-personalizados'
+import type { RegraFiltro, LogicaFiltro } from '@/lib/filtros-personalizados'
 import SeletorSemana from '@/app/(autenticado)/crm/_components/SeletorSemana'
 import LeadScoreGraficoSemana from './LeadScoreGraficoSemana'
 import TabelaVendasMini from './TabelaVendasMini'
@@ -141,6 +141,8 @@ export default function WebinarioClient() {
         { data: periodoRaw },
         { data: tRegrasRaw },
         { data: vRegrasRaw },
+        { data: tCab },
+        { data: vCab },
       ] = await Promise.all([
         supabase.rpc('listar_semanas_trafego', { p_limit: 60, p_offset: 0 }),
         supabase.rpc('listar_semanas_vendas',   { p_limit: 60 }),
@@ -149,12 +151,16 @@ export default function WebinarioClient() {
           .select('campo, operador, valor, ordem').eq('filtro_id', FILTRO_TRAFEGO_ID).order('ordem'),
         supabase.from('filtros_personalizados_regras')
           .select('campo, operador, valor, ordem').eq('filtro_id', FILTRO_VENDAS_ID).order('ordem'),
+        supabase.from('filtros_personalizados').select('logica').eq('id', FILTRO_TRAFEGO_ID).maybeSingle(),
+        supabase.from('filtros_personalizados').select('logica').eq('id', FILTRO_VENDAS_ID).maybeSingle(),
       ])
 
       const semTrafego = (semTrafegoRaw ?? []) as SemanaRange[]
       const semVendas  = (semVendasRaw  ?? []) as SemanaRange[]
       const regrasTrafego = (tRegrasRaw ?? []) as RegraFiltro[]
       const regrasVendas  = (vRegrasRaw ?? []) as RegraFiltro[]
+      const logicaTrafego: LogicaFiltro = (tCab?.logica as LogicaFiltro) ?? 'and'
+      const logicaVendas:  LogicaFiltro = (vCab?.logica as LogicaFiltro) ?? 'and'
 
       const rangeTrafego = semTrafego.find(s => s.numero === numeroSemana) ?? null
       const rangeVendas  = semVendas.find(s => s.numero === numeroSemana)  ?? null
@@ -168,7 +174,7 @@ export default function WebinarioClient() {
           .select('amount_spent, impressions, link_clicks, landing_page_views, checkouts_initiated')
           .gte('date_ref', rangeTrafego.inicio)
           .lte('date_ref', rangeTrafego.fim)
-        if (regrasTrafego.length) q = aplicarRegras(q, regrasTrafego)
+        if (regrasTrafego.length) q = aplicarRegras(q, regrasTrafego, logicaTrafego)
         trafegoQ = q
       } else {
         trafegoQ = Promise.resolve({ data: [] })
@@ -186,7 +192,7 @@ export default function WebinarioClient() {
           .select('id, data_pedido, data_aprovacao, nome_contato, email_contato, telefone_contato, nome_oferta, produto_id, oferta_id, marketplace, status, pagamento, parcelas, moeda, valor_venda, valor_liquido, utm_source, utm_campaign, utm_medium, utm_content, venda_principal_id')
           .gte('data_pedido', vIni)
           .lte('data_pedido', vFim)
-        if (regrasVendas.length) q = aplicarRegras(q, regrasVendas)
+        if (regrasVendas.length) q = aplicarRegras(q, regrasVendas, logicaVendas)
         vendasQ = q
       } else {
         vendasQ = Promise.resolve({ data: [] })

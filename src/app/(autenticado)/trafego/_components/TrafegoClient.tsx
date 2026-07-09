@@ -8,7 +8,8 @@ import TrafegoKpis from './TrafegoKpis'
 import TrafegoFiltros from './TrafegoFiltros'
 import TrafegoGrafico from './TrafegoGrafico'
 import TrafegoTabela from './TrafegoTabela'
-import type { FiltroPersonalizado, RegraFiltro } from '@/lib/filtros-personalizados'
+import type { FiltroPersonalizado } from '@/lib/filtros-personalizados'
+import { aplicarRegras } from '@/lib/filtros-personalizados'
 export interface SemanaOpcao { numero: number; inicio: string; fim: string }
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -70,21 +71,9 @@ interface Props {
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function aplicarRegras(q: any, regras: RegraFiltro[]) {
-  for (const { campo, operador, valor } of regras) {
-    switch (operador) {
-      case 'contem':     q = q.ilike(campo, `%${valor}%`); break
-      case 'nao_contem': q = q.not(campo, 'ilike', `%${valor}%`); break
-      case 'igual':      q = q.eq(campo, valor); break
-      case 'comeca_com': q = q.ilike(campo, `${valor}%`); break
-      case 'maior_que':  q = q.filter(`${campo}::int`, 'gt', valor); break
-      case 'menor_que':  q = q.filter(`${campo}::int`, 'lt', valor); break
-    }
-  }
-  return q
-}
+// A aplicação das regras (incl. lógica and/or) usa a função central de
+// @/lib/filtros-personalizados — os campos de tráfego são todos text, então os
+// operadores string cobrem o uso real. (Antes havia uma cópia local divergente.)
 
 function dataISO(d: Date) { return d.toISOString().split('T')[0] }
 
@@ -118,7 +107,7 @@ export default function TrafegoClient({ inicial, filtrosDefault, pageSize, seman
     async function carregarFiltrosSalvos() {
       const { data: filtrosData } = await supabase
         .from('filtros_personalizados')
-        .select('id, nome, modulo, ativo, criado_por, created_at')
+        .select('id, nome, modulo, ativo, criado_por, created_at, logica')
         .eq('modulo', 'trafego')
         .eq('ativo', true)
         .order('nome')
@@ -151,7 +140,7 @@ export default function TrafegoClient({ inicial, filtrosDefault, pageSize, seman
       if (f.conta)    kpiQ = kpiQ.eq('ad_account_id', f.conta)
       if (f.campanha) kpiQ = kpiQ.eq('campaign_name', f.campanha)
       if (f.adset)    kpiQ = kpiQ.eq('adset_name', f.adset)
-      if (filtroPersonalizadoRef.current?.regras?.length) kpiQ = aplicarRegras(kpiQ, filtroPersonalizadoRef.current.regras)
+      if (filtroPersonalizadoRef.current?.regras?.length) kpiQ = aplicarRegras(kpiQ, filtroPersonalizadoRef.current.regras, filtroPersonalizadoRef.current.logica ?? 'and')
       const { data: kpiRows } = await kpiQ
 
       // Alcance deduplcado: sem campanha/adset usa trafego_reach (nível de conta, igual BM)
@@ -192,7 +181,7 @@ export default function TrafegoClient({ inicial, filtrosDefault, pageSize, seman
       if (f.conta)    gQ = gQ.eq('ad_account_id', f.conta)
       if (f.campanha) gQ = gQ.eq('campaign_name', f.campanha)
       if (f.adset)    gQ = gQ.eq('adset_name', f.adset)
-      if (filtroPersonalizadoRef.current?.regras?.length) gQ = aplicarRegras(gQ, filtroPersonalizadoRef.current.regras)
+      if (filtroPersonalizadoRef.current?.regras?.length) gQ = aplicarRegras(gQ, filtroPersonalizadoRef.current.regras, filtroPersonalizadoRef.current.logica ?? 'and')
       const { data: gRaw } = await gQ
 
       const gMap = new Map<string, { investido: number; leads: number }>()
@@ -210,7 +199,7 @@ export default function TrafegoClient({ inicial, filtrosDefault, pageSize, seman
       let cQ = supabase.from('trafego').select('campaign_name')
         .gte('date_ref', f.inicio).lte('date_ref', f.fim)
       if (f.conta) cQ = cQ.eq('ad_account_id', f.conta)
-      if (filtroPersonalizadoRef.current?.regras?.length) cQ = aplicarRegras(cQ, filtroPersonalizadoRef.current.regras)
+      if (filtroPersonalizadoRef.current?.regras?.length) cQ = aplicarRegras(cQ, filtroPersonalizadoRef.current.regras, filtroPersonalizadoRef.current.logica ?? 'and')
       const { data: cRaw } = await cQ
       setCampanhas(Array.from(new Set((cRaw ?? []).map(r => r.campaign_name).filter(Boolean))).sort() as string[])
 
@@ -219,7 +208,7 @@ export default function TrafegoClient({ inicial, filtrosDefault, pageSize, seman
         .gte('date_ref', f.inicio).lte('date_ref', f.fim)
       if (f.conta)    aQ = aQ.eq('ad_account_id', f.conta)
       if (f.campanha) aQ = aQ.eq('campaign_name', f.campanha)
-      if (filtroPersonalizadoRef.current?.regras?.length) aQ = aplicarRegras(aQ, filtroPersonalizadoRef.current.regras)
+      if (filtroPersonalizadoRef.current?.regras?.length) aQ = aplicarRegras(aQ, filtroPersonalizadoRef.current.regras, filtroPersonalizadoRef.current.logica ?? 'and')
       const { data: aRaw } = await aQ
       setAdsets(Array.from(new Set((aRaw ?? []).map(r => r.adset_name).filter(Boolean))).sort() as string[])
 
@@ -234,7 +223,7 @@ export default function TrafegoClient({ inicial, filtrosDefault, pageSize, seman
       if (f.conta)    tQ = tQ.eq('ad_account_id', f.conta)
       if (f.campanha) tQ = tQ.eq('campaign_name', f.campanha)
       if (f.adset)    tQ = tQ.eq('adset_name', f.adset)
-      if (filtroPersonalizadoRef.current?.regras?.length) tQ = aplicarRegras(tQ, filtroPersonalizadoRef.current.regras)
+      if (filtroPersonalizadoRef.current?.regras?.length) tQ = aplicarRegras(tQ, filtroPersonalizadoRef.current.regras, filtroPersonalizadoRef.current.logica ?? 'and')
       const { data: tData, count: tCount } = await tQ
       setRegistros(tData ?? [])
       setTotal(tCount ?? 0)

@@ -16,6 +16,36 @@
 
 ---
 
+## [2026-07-09] Filtros Personalizados: lógica AND/OR entre as regras — @claude
+- **O quê:** filtros personalizados agora combinam as regras com **E (todas)** ou **OU (qualquer)**, não só AND.
+  - **Banco:** migration `20260709120000_filtros_add_logica.sql` — nova coluna `filtros_personalizados.logica`
+    (`text NOT NULL DEFAULT 'and' CHECK (logica IN ('and','or'))`). Backfill automático: os 21 filtros
+    existentes ficaram `'and'`.
+  - **RPC:** migration `20260709120100_get_trafego_ads_aba_logica.sql` — `get_trafego_ads_aba` ganhou
+    `p_logica text DEFAULT 'and'` (dropada a assinatura antiga de 3 args; único caller é `TabelaAdsPerformance`).
+    As regras entre si combinam com AND/OR conforme `p_logica`; o bloco de regras entra **sempre em AND**
+    com o WHERE de data. `p_logica` mapeado por CASE→literal (sem injection).
+  - **Front:** `lib/filtros-personalizados.ts` — novo tipo `LogicaFiltro`, campo `logica` em
+    `FiltroPersonalizado`, helper `orVal()` (escaping p/ `.or()`) e `aplicarRegras(q, regras, logica='and')`
+    (modo AND = comportamento histórico intacto; modo OR = um único `.or()` do PostgREST, coringa `*`).
+    `ConfiguracoesClient` ganhou o seletor "Todas (E)/Qualquer (OU)" (só com 2+ regras) + persistência +
+    listagem dinâmica ("+ AND"/"+ OU"). `VendasClient`, `TpwClient`, `WebinarioClient`, `TabelaAdsPerformance`
+    passaram a ler e propagar a `logica`. `TrafegoClient` **passou a reusar** a `aplicarRegras` central
+    (removida a cópia local divergente — reduz a duplicação de 3 → 2 implementações).
+- **Por quê:** era impossível expressar "campanhas TPW **OU** Desafio" — um filtro "contém tpw" E "contém desafio"
+  retorna 0 (nenhuma campanha tem os dois termos no nome). Pedido do usuário.
+- **Como testou:** `npm run build` **OK** (type-check limpo). Teste do caminho **client-side** (supabase-js,
+  service key p/ furar RLS): `contém tpw` OU `contém desafio` = **1087** (bate com o SQL de referência),
+  modo AND = **0**, valor com vírgula (`"live, aula"`) não quebra o `.or()`. Operadores delicados dentro do OR
+  batem com o SQL: `nao_contem` = 7223, `menor_igual`+NULL = 4491. Teste da **RPC** (`p_logica`): OR=112/AND=0.
+  Regressão: 21 filtros seguem `'and'` (código AND preservado byte-a-byte).
+- **Impacto/risco:** **baixo.** Retrocompatível por construção (default `'and'`; assinatura de `aplicarRegras`
+  com 3º arg opcional). ⚠️ A `aplicarRegras` está espelhada em 2 lugares (lib central + RPC SQL) — manter em
+  sincronia. Deploy no EasyPanel (main): migrations já aplicadas no banco; o front que passa `p_logica`/`logica`
+  deve subir junto (a RPC antiga de 3 args foi dropada).
+- **Docs atualizados:** `TABELAS.md` (coluna `logica`), `FUNCOES-SQL.md` (`get_trafego_ads_aba` c/ `p_logica`),
+  `FRONTEND.md` (seletor E/OU + `aplicarRegras`), este CHANGELOG.
+
 ## [2026-07-07] Webinário: virada da semana antecipada p/ 19:00 (fim do bug de atribuição) — @claude
 - **O quê:** `semana_config('webn')` mudou de **19:40→19:39** para **19:00→18:59** (BRT). Migration
   `20260707191500_semana_config_webn_1900.sql` (UPDATE em `semana_config`, entidade `webn`). Também:

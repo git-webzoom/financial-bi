@@ -5,7 +5,7 @@ import { ChevronDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatMoeda } from '@/lib/format'
 import { aplicarRegras } from '@/lib/filtros-personalizados'
-import type { RegraFiltro } from '@/lib/filtros-personalizados'
+import type { RegraFiltro, LogicaFiltro } from '@/lib/filtros-personalizados'
 import TabelaVendasMini from './TabelaVendasMini'
 import TabelaAdsPerformance from './TabelaAdsPerformance'
 import { montarComprasFiltradas } from '@/lib/agrupar-compras'
@@ -132,8 +132,8 @@ export default function TpwClient({ filtroTrafegoId = null, filtroVendasId = nul
     setCarregando(true)
     setRangeAplicado({ inicio, fim })
     try {
-      // Regras dos filtros vinculados à aba (recebidos por props). Sem filtro → soma tudo no range.
-      const [{ data: tRegrasRaw }, { data: vRegrasRaw }] = await Promise.all([
+      // Regras + lógica (and/or) dos filtros vinculados à aba (recebidos por props). Sem filtro → soma tudo no range.
+      const [{ data: tRegrasRaw }, { data: vRegrasRaw }, { data: tCab }, { data: vCab }] = await Promise.all([
         filtroTrafegoId
           ? supabase.from('filtros_personalizados_regras')
               .select('campo, operador, valor, ordem').eq('filtro_id', filtroTrafegoId).order('ordem')
@@ -142,24 +142,32 @@ export default function TpwClient({ filtroTrafegoId = null, filtroVendasId = nul
           ? supabase.from('filtros_personalizados_regras')
               .select('campo, operador, valor, ordem').eq('filtro_id', filtroVendasId).order('ordem')
           : Promise.resolve({ data: [] as RegraFiltro[], error: null }),
+        filtroTrafegoId
+          ? supabase.from('filtros_personalizados').select('logica').eq('id', filtroTrafegoId).maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+        filtroVendasId
+          ? supabase.from('filtros_personalizados').select('logica').eq('id', filtroVendasId).maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
       ])
 
       const regrasTrafego: RegraFiltro[] = (tRegrasRaw ?? []) as RegraFiltro[]
       const regrasVendas:  RegraFiltro[] = (vRegrasRaw ?? []) as RegraFiltro[]
+      const logicaTrafego: LogicaFiltro = (tCab?.logica as LogicaFiltro) ?? 'and'
+      const logicaVendas:  LogicaFiltro = (vCab?.logica as LogicaFiltro) ?? 'and'
 
       let trafegoQ = supabase
         .from('trafego')
         .select('amount_spent, impressions, link_clicks, landing_page_views, checkouts_initiated')
         .gte('date_ref', inicio)
         .lte('date_ref', fim)
-      if (regrasTrafego.length) trafegoQ = aplicarRegras(trafegoQ, regrasTrafego)
+      if (regrasTrafego.length) trafegoQ = aplicarRegras(trafegoQ, regrasTrafego, logicaTrafego)
 
       let vendasQ = supabase
         .from('vendas')
         .select('id, data_pedido, data_aprovacao, nome_contato, email_contato, telefone_contato, nome_oferta, produto_id, oferta_id, marketplace, status, pagamento, parcelas, moeda, valor_venda, valor_liquido, utm_source, utm_campaign, utm_medium, utm_content, venda_principal_id')
         .gte('data_pedido', inicio + 'T00:00:00-03:00')
         .lte('data_pedido', fim    + 'T23:59:59.999-03:00')
-      if (regrasVendas.length) vendasQ = aplicarRegras(vendasQ, regrasVendas)
+      if (regrasVendas.length) vendasQ = aplicarRegras(vendasQ, regrasVendas, logicaVendas)
 
       const [{ data: tRows }, { data: vRows }] = await Promise.all([trafegoQ, vendasQ])
 

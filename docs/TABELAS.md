@@ -45,7 +45,7 @@
 | `semana_config` | 6 | Configuração das semanas (dia/hora de virada em BRT). 3 entidades: `captacao` (Ter→Ter 19:30, rege CRM/Grupos), `webn` (Ter→Ter **19:00**, rege Vendas/Webinário — antecipado 20:00→19:40 em 2026-06-10 e 19:40→19:00 em 2026-07-07, p/ acessos que chegam antes do ao vivo ~19:56 caírem na semana certa), `trafego` (Qua→Ter, rege só o Tráfego — Meta entrega gasto só por data, sem hora). |
 | `webinario_semanas` | 5 | Régua MASTER das semanas de webinário (data_inicio / data_evento / fim). Criada sozinha pelo cron `ensure-proxima-semana` (`ensure_semana_existe`). FK de `webinario_presencas` e `webinario_inscritos` aponta aqui. |
 | `webinario_semanas_presencas` | 5 | **LEGADA** (sem urgência de drop — ver `PENDENCIAS.md` 1b). Não é mais exigida por nenhum FK desde 2026-06-10. |
-| `filtros_personalizados` | 7 | Filtros salvos por módulo (trafego/vendas/...). |
+| `filtros_personalizados` | 8 | Filtros salvos por módulo (trafego/vendas/...). Coluna `logica` (`'and'`/`'or'`, default `'and'`) define se as regras do filtro são combinadas com E (todas) ou OU (qualquer). |
 | `filtros_personalizados_regras` | 7 | Regras de cada filtro salvo. |
 | `dashboard_abas` | 6 | Abas dinâmicas do dashboard. `tipo_mockup` (venda_direta/captacao) define o layout; `ordem`/`ativo`. Nome único (case-insensitive). A aba "Webnário" do dashboard NÃO entra aqui (é fixa no código). |
 | `dashboard_aba_filtros` | 5 | Vínculos aba↔filtro por **papel** ('trafego','vendas', futuros). FK p/ `filtros_personalizados` é `ON DELETE SET NULL`. Único por `(aba_id, papel)`. |
